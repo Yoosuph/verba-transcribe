@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: verba-speech
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["*"]'
+      - key: MOCK_MODE_IF_NO_KEY
+        value: "true"
