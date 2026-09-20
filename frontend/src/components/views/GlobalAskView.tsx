@@ -76,9 +76,9 @@ export const GlobalAskView: React.FC<GlobalAskViewProps> = ({
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-[#2F45EE]" />
+          <Sparkles className="w-5 h-5 text-[#008751]" />
           <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-            Meeting Intelligence
+            Judicial Records Intelligence
           </h1>
         </div>
       </div>
@@ -89,7 +89,7 @@ export const GlobalAskView: React.FC<GlobalAskViewProps> = ({
           <div key={idx} className="space-y-2">
             {/* User Question */}
             <div className="flex justify-end">
-              <div className="bg-[#111827] text-white text-xs font-medium px-4 py-2.5 rounded-2xl rounded-tr-sm max-w-[85%] shadow-xs">
+              <div className="bg-[#043320] text-white text-xs font-medium px-4 py-2.5 rounded-2xl rounded-tr-sm max-w-[85%] shadow-xs">
                 {item.q}
               </div>
             </div>
@@ -97,9 +97,9 @@ export const GlobalAskView: React.FC<GlobalAskViewProps> = ({
             {/* AI Answer */}
             <div className="flex justify-start">
               <div className="bg-white border border-slate-100 text-slate-800 text-xs font-normal px-4 py-3 rounded-2xl rounded-tl-sm max-w-[90%] shadow-xs space-y-1.5">
-                <div className="flex items-center gap-1.5 font-bold text-[#2F45EE]">
+                <div className="flex items-center gap-1.5 font-bold text-[#008751]">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Verba AI</span>
+                  <span>Judiciary Assistant</span>
                   {item.sessionTitle && (
                     <span className="text-[10px] text-slate-400 font-normal">
                       · {item.sessionTitle}
@@ -120,21 +120,21 @@ export const GlobalAskView: React.FC<GlobalAskViewProps> = ({
             e.preventDefault();
             handleAskGlobal(query);
           }}
-          className="w-full bg-white border border-slate-200/90 rounded-full px-4 py-2.5 flex items-center justify-between gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+          className="w-full bg-white border border-slate-200/90 rounded-full px-4 py-2.5 flex items-center justify-between gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-within:ring-2 focus-within:ring-[#008751]/30"
         >
-          <Sparkles className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask across all meetings..."
+            placeholder="Query all proceedings, rulings, evidence..."
             disabled={loading}
             className="bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none w-full font-medium"
           />
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="w-8 h-8 rounded-full bg-[#2F45EE] disabled:opacity-40 text-white flex items-center justify-center flex-shrink-0 transition-all active:scale-95 shadow-xs"
+            className="w-8 h-8 rounded-full bg-[#008751] hover:bg-[#007043] disabled:opacity-40 text-white flex items-center justify-center flex-shrink-0 transition-all active:scale-95 shadow-xs"
           >
             {loading ? (
               <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />

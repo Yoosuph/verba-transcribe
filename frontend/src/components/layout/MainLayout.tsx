@@ -9,6 +9,7 @@ import { GlobalActionsView } from '../views/GlobalActionsView';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
 import type { SessionState, MeetingSummary } from '../../types/transcription';
 import { Mic, FileText, FileCheck } from 'lucide-react';
+import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
 const LOCAL_STORAGE_KEY = 'verba_user_sessions_v1';
 
@@ -191,25 +192,47 @@ export const MainLayout: React.FC = () => {
   const effectiveSession = selectedSession || (sessions.length > 0 ? sessions[0] : null);
 
   return (
-    <div className="min-h-screen w-full bg-[#0B0F19] text-slate-100 flex flex-col items-center justify-center p-0 sm:py-4 relative selection:bg-[#2F45EE]/40 font-sans">
-      {/* Subtle Studio Glow */}
-      <div className="fixed top-1/3 left-1/3 w-96 h-96 bg-[#2F45EE]/10 blur-[140px] pointer-events-none -z-10 rounded-full" />
+    <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden relative selection:bg-[#008751]/30 font-sans">
+      {/* Official Nigerian National Flag Tricolor Accent Ribbon */}
+      <div className="w-full h-1 nigerian-tricolor flex-shrink-0 z-50" />
 
-      {/* Main Mobile App Container */}
-      <PhoneFrame theme={pageTheme}>
-        {/* Content Body Area with fluid directional motion */}
-        <div
-          key={activePage}
-          className={`flex-1 flex flex-col overflow-hidden relative ${
-            navDirection === 'forward'
-              ? 'page-enter-forward'
-              : navDirection === 'backward'
-              ? 'page-enter-backward'
-              : navDirection === 'up'
-              ? 'page-enter-up'
-              : 'page-enter-fade'
-          }`}
-        >
+      {/* Official Nigerian Judiciary Top Header Bar */}
+      <header className="w-full bg-[#043320] text-white border-b border-emerald-900/60 px-4 sm:px-8 py-2.5 flex items-center justify-between z-40 shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <JudiciaryLogo size="sm" variant="full" showText={true} lightMode={false} />
+        </div>
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-500/25 text-[11px] sm:text-xs text-emerald-200">
+            <span className={`w-2 h-2 rounded-full ${status === 'recording' ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`} />
+            <span className="font-semibold tracking-wide uppercase text-[10px] sm:text-[11px]">
+              {status === 'recording' ? 'Court Session Live' : 'Electronic Court Record'}
+            </span>
+          </div>
+
+          <span className="text-[10px] font-bold text-emerald-300/80 uppercase tracking-widest hidden md:inline border-l border-emerald-700/50 pl-3">
+            Federal Republic of Nigeria
+          </span>
+        </div>
+      </header>
+
+      {/* Main Responsive App Body: Fills the rest of the browser window smoothly */}
+      <main className="flex-1 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
+        {/* Main Mobile/Desktop App Container */}
+        <PhoneFrame theme={pageTheme}>
+          {/* Content Body Area with fluid directional motion */}
+          <div
+            key={activePage}
+            className={`flex-1 flex flex-col overflow-hidden relative ${
+              navDirection === 'forward'
+                ? 'page-enter-forward'
+                : navDirection === 'backward'
+                ? 'page-enter-backward'
+                : navDirection === 'up'
+                ? 'page-enter-up'
+                : 'page-enter-fade'
+            }`}
+          >
           {/* 1. Meetings Page */}
           {activePage === 'meetings' && (
             <MeetingsListView
@@ -261,7 +284,7 @@ export const MainLayout: React.FC = () => {
                 </p>
                 <button
                   onClick={handleStartRecording}
-                  className="px-4 py-2 rounded-full bg-[#2F45EE] text-white text-xs font-semibold shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5"
                 >
                   <Mic className="w-3.5 h-3.5" />
                   <span>Start Recording</span>
@@ -291,7 +314,7 @@ export const MainLayout: React.FC = () => {
                 </p>
                 <button
                   onClick={handleStartRecording}
-                  className="px-4 py-2 rounded-full bg-[#2F45EE] text-white text-xs font-semibold shadow-md shadow-indigo-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5"
                 >
                   <Mic className="w-3.5 h-3.5" />
                   <span>Start Recording</span>
@@ -322,6 +345,7 @@ export const MainLayout: React.FC = () => {
           theme={pageTheme}
         />
       </PhoneFrame>
-    </div>
-  );
+    </main>
+  </div>
+);
 };

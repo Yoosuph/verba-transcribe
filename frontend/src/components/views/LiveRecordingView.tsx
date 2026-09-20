@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Loader2,
 } from 'lucide-react';
+import { JudiciaryLogo } from '../common/JudiciaryLogo';
 import type { LiveTranscriptItem, ProcessingStage } from '../../types/transcription';
 
 interface LiveRecordingViewProps {
@@ -153,10 +154,10 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
   // ================= 1. DEDICATED PROCESSING & COMPLETION SCREEN =================
   if (showProcessingScreen) {
     return (
-      <div className="flex-1 flex flex-col bg-[#2A39E8] text-white p-6 justify-between select-none relative overflow-hidden">
+      <div className="flex-1 flex flex-col bg-gradient-to-b from-[#005A34] via-[#044428] to-[#022C22] text-white p-6 justify-between select-none relative overflow-hidden">
         {/* Subtle Background Glows */}
-        <div className="absolute -top-24 -right-24 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-indigo-950/40 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-black/40 rounded-full blur-3xl pointer-events-none" />
 
         {/* Top Header Status Indicators */}
         <div className="flex items-center justify-between pt-2 flex-shrink-0 relative z-10">
@@ -302,29 +303,32 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
 
   // ================= 2. ACTIVE LIVE RECORDING SCREEN =================
   return (
-    <div className="flex-1 flex flex-col bg-[#2A39E8] text-white overflow-hidden relative select-none">
+    <div className="flex-1 flex flex-col bg-gradient-to-b from-[#005A34] via-[#044428] to-[#022C22] text-white overflow-hidden relative select-none">
       {/* Top Bar */}
       <div className="flex items-center justify-between px-5 pt-4 pb-2 flex-shrink-0">
         <button
           onClick={onMinimize}
           className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white"
-          title="Minimize to Meetings list"
+          title="Minimize to Proceedings list"
         >
           <ChevronDown className="w-5 h-5" />
         </button>
 
         <div className="flex flex-col items-center">
-          <span className="text-sm font-semibold text-white/95 truncate max-w-[200px]">
-            {title}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+            <span className="text-sm font-bold text-white/95 truncate max-w-[200px]">
+              {title}
+            </span>
+          </div>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span
               className={`w-2 h-2 rounded-full ${
                 isPaused ? 'bg-amber-400' : 'bg-red-500 animate-pulse'
               }`}
             />
-            <span className="text-[11px] font-medium text-white/80">
-              {isPaused ? 'Paused' : 'Recording'}
+            <span className="text-[11px] font-medium text-emerald-200">
+              {isPaused ? 'Court Session Paused' : 'Live Court Recording'}
             </span>
           </div>
         </div>
@@ -426,7 +430,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
           >
             <Bookmark className="w-6 h-6 fill-white/80" />
             {bookmarks.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-white text-[#2A39E8] font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute -top-1 -right-1 bg-white text-[#008751] font-bold text-[10px] w-5 h-5 rounded-full flex items-center justify-center shadow-xs">
                 {bookmarks.length}
               </span>
             )}

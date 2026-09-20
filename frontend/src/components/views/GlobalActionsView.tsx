@@ -34,7 +34,7 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-          All Action Items
+          Court Orders & Directives
         </h1>
       </div>
 
@@ -42,21 +42,21 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
       <div className="flex-1 overflow-y-auto px-5 py-2 space-y-3 pb-24">
         {allActions.length === 0 ? (
           <div className="text-center py-12 text-slate-400 text-sm">
-            No action items found yet.
+            No court directives or orders identified yet.
           </div>
         ) : (
           allActions.map((act, idx) => (
             <div
               key={idx}
               onClick={() => onSelectMeeting(act.sessionObj)}
-              className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs hover:border-slate-200 transition-all cursor-pointer space-y-2 touch-press"
+              className="bg-white rounded-2xl p-4 border border-slate-100 shadow-xs hover:border-emerald-200 transition-all cursor-pointer space-y-2 touch-press"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5">
                   <div
                     className={`w-5 h-5 rounded-md flex items-center justify-center mt-0.5 ${
                       act.completed
-                        ? 'bg-[#10B981] text-white shadow-xs'
+                        ? 'bg-[#008751] text-white shadow-xs'
                         : 'border-2 border-slate-300'
                     }`}
                   >
@@ -71,13 +71,13 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
                       {act.task}
                     </p>
                     <span className="text-xs text-slate-400">
-                      From: {act.sessionTitle}
+                      Case: {act.sessionTitle}
                     </span>
                   </div>
                 </div>
 
                 {act.deadline && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-medium">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#008751] font-medium border border-emerald-100">
                     {act.deadline}
                   </span>
                 )}
@@ -87,8 +87,8 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
                 <span className="text-slate-500 font-medium">
                   Assignee: <span className="text-slate-800 font-bold">{act.assignee || 'Unassigned'}</span>
                 </span>
-                <span className="text-[#2F45EE] font-semibold hover:underline">
-                  View Meeting →
+                <span className="text-[#008751] font-semibold hover:underline">
+                  View Proceeding →
                 </span>
               </div>
             </div>

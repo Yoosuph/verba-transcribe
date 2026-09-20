@@ -47,8 +47,8 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           <div
             className={`absolute top-1.5 bottom-1.5 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-md pointer-events-none ${
               isRoyal
-                ? 'bg-white shadow-indigo-950/20'
-                : 'bg-[#2F45EE] shadow-indigo-500/25'
+                ? 'bg-white shadow-emerald-950/20'
+                : 'bg-[#008751] shadow-emerald-700/25'
             }`}
             style={{
               width: 'calc((100% - 12px) / 3)',
@@ -64,17 +64,17 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-2 rounded-xl transition-all duration-200 touch-press ${
             activePage === 'meetings'
               ? isRoyal
-                ? 'text-[#2F45EE] font-bold'
+                ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
               : isRoyal
               ? 'text-white/75 hover:text-white'
               : 'text-slate-500 hover:text-slate-900'
           }`}
-          title="All Meetings"
+          title="Court Proceedings"
         >
           <Menu className={`w-4 h-4 transition-transform duration-200 ${activePage === 'meetings' ? 'scale-110' : 'scale-100'}`} />
           <span className="text-[11px] mt-1 tracking-tight font-medium">
-            Meetings
+            Proceedings
           </span>
         </button>
 
@@ -85,7 +85,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-2 rounded-xl transition-all duration-200 touch-press ${
             activePage === 'transcript' || activePage === 'summary'
               ? isRoyal
-                ? 'text-[#2F45EE] font-bold'
+                ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
               : !hasSession
               ? 'opacity-35 cursor-not-allowed'
@@ -93,7 +93,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
               ? 'text-white/75 hover:text-white'
               : 'text-slate-500 hover:text-slate-900'
           }`}
-          title="Meeting Detail & Transcript"
+          title="Court Transcript & Record"
         >
           <FileText className={`w-4 h-4 transition-transform duration-200 ${activePage === 'transcript' || activePage === 'summary' ? 'scale-110' : 'scale-100'}`} />
           <span className="text-[11px] mt-1 tracking-tight font-medium">
@@ -107,13 +107,13 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-2 rounded-xl transition-all duration-200 touch-press ${
             activePage === 'actions'
               ? isRoyal
-                ? 'text-[#2F45EE] font-bold'
+                ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
               : isRoyal
               ? 'text-white/75 hover:text-white'
               : 'text-slate-500 hover:text-slate-900'
           }`}
-          title="Action Items"
+          title="Orders & Actions"
         >
           <div className="relative">
             <CheckSquare className={`w-4 h-4 transition-transform duration-200 ${activePage === 'actions' ? 'scale-110' : 'scale-100'}`} />
@@ -121,18 +121,18 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
               <span className={`absolute -top-1 -right-2.5 px-1 py-0.2 rounded-full text-[9px] font-bold leading-none transition-colors duration-200 ${
                 activePage === 'actions'
                   ? isRoyal
-                    ? 'bg-[#2F45EE] text-white'
-                    : 'bg-white text-[#2F45EE]'
+                    ? 'bg-[#008751] text-white'
+                    : 'bg-white text-[#008751]'
                   : isRoyal
-                  ? 'bg-white text-[#2F45EE]'
-                  : 'bg-[#2F45EE] text-white'
+                  ? 'bg-white text-[#008751]'
+                  : 'bg-[#008751] text-white'
               }`}>
                 {actionCount}
               </span>
             )}
           </div>
           <span className="text-[11px] mt-1 tracking-tight font-medium">
-            Actions
+            Orders
           </span>
         </button>
       </nav>

@@ -12,10 +12,12 @@ export const PhoneFrame: React.FC<PhoneFrameProps> = ({
   const isRoyal = theme === 'royal';
 
   return (
-    <div className="w-full sm:max-w-[430px] mx-auto h-[100dvh] sm:h-[860px] sm:max-h-[94vh] sm:my-auto sm:rounded-3xl sm:border sm:border-slate-800/80 sm:shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-hidden flex flex-col relative transition-colors duration-300">
+    <div className="w-full flex-1 h-full flex flex-col overflow-hidden relative transition-colors duration-300">
       <div
-        className={`w-full h-full flex flex-col overflow-hidden relative ${
-          isRoyal ? 'bg-[#2838E8]' : 'bg-[#F8FAFC]'
+        className={`w-full h-full flex-1 flex flex-col overflow-hidden relative transition-colors duration-300 ${
+          isRoyal
+            ? 'bg-gradient-to-b from-[#005A34] via-[#044428] to-[#022C22] text-white'
+            : 'bg-[#F8FAF9] text-slate-900'
         }`}
       >
         {children}

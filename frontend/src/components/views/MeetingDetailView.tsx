@@ -183,13 +183,13 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
     setTimeout(() => setCopySuccess(false), 2000);
   };
 
-  // Multi-color spectrum waveform bars
+  // Nigerian Judiciary Emerald & Gold spectrum waveform bars
   const waveformColors = [
-    '#3B82F6', '#2563EB', '#F97316', '#EA580C', '#10B981', '#059669',
-    '#06B6D4', '#0891B2', '#F43F5E', '#E11D48', '#8B5CF6', '#7C3AED',
-    '#F59E0B', '#D97706', '#14B8A6', '#0D9488', '#6366F1', '#4F46E5',
-    '#EC4899', '#DB2777', '#3B82F6', '#2563EB', '#F97316', '#EA580C',
-    '#10B981', '#059669', '#06B6D4', '#0891B2', '#F43F5E', '#E11D48',
+    '#008751', '#059669', '#10B981', '#34D399', '#D97706', '#F59E0B',
+    '#008751', '#047857', '#059669', '#FBBF24', '#D97706', '#065F46',
+    '#008751', '#10B981', '#F59E0B', '#047857', '#34D399', '#B45309',
+    '#008751', '#059669', '#D97706', '#10B981', '#047857', '#F59E0B',
+    '#008751', '#059669', '#10B981', '#34D399', '#D97706', '#047857',
   ];
 
   const segments = session.final_transcript?.segments || [];
@@ -204,24 +204,24 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
         <button
           onClick={onBack}
           className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700"
-          title="Back to Meetings"
+          title="Back to Proceedings"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
 
         <h2 className="text-base font-bold text-slate-900 truncate max-w-[180px]">
           {activeTab === 'transcript'
-            ? 'Transcript'
+            ? 'Court Record'
             : activeTab === 'actions'
-            ? 'Action Items'
-            : 'Meeting Notes'}
+            ? 'Orders & Rulings'
+            : 'Proceedings Summary'}
         </h2>
 
         <div className="flex items-center gap-2">
           <button
             onClick={() => onExport && onExport('markdown')}
             className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700"
-            title="Export / Share"
+            title="Export Official Record"
           >
             <Share2 className="w-4 h-4" />
           </button>
@@ -233,13 +233,13 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
 
       {/* Meeting Header Block */}
       <div className="px-5 pt-1 pb-3 flex-shrink-0">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#ECEFFE] text-[#3B4BEA] text-xs font-semibold mb-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/60 text-[#008751] text-xs font-semibold mb-2">
           <FileCheck className="w-3.5 h-3.5" />
-          <span>Finalized & Diarized</span>
+          <span>Official Record · Diarized</span>
         </div>
 
         <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-snug truncate">
-          {session.title || 'Meeting Session'}
+          {session.title || 'Court Proceeding'}
         </h1>
 
         <div className="flex items-center justify-between mt-1">
@@ -255,10 +255,10 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
               onClick={togglePlay}
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer ${
                 isPlayingAudio
-                  ? 'bg-[#2F45EE] text-white shadow-indigo-500/20'
-                  : 'bg-white border border-slate-200/80 text-[#2F45EE] hover:bg-slate-50'
+                  ? 'bg-[#008751] text-white shadow-emerald-700/20'
+                  : 'bg-white border border-emerald-300/80 text-[#008751] hover:bg-emerald-50/50'
               }`}
-              title={isPlayingAudio ? 'Pause meeting audio' : 'Replay meeting audio'}
+              title={isPlayingAudio ? 'Pause proceeding audio' : 'Replay proceeding audio'}
             >
               {isPlayingAudio ? (
                 <>
@@ -374,7 +374,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                 <div className="space-y-2">
                   {session.summary.decisions.map((dec, idx) => (
                     <div key={idx} className="flex items-start gap-2.5 text-sm text-slate-800">
-                      <div className="w-4 h-4 rounded-full bg-[#EEF2FF] text-[#2F45EE] flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <div className="w-4 h-4 rounded-full bg-emerald-50 text-[#008751] flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Check className="w-3 h-3 stroke-[2.5]" />
                       </div>
                       <span className="font-normal leading-snug">{dec.decision}</span>
@@ -409,7 +409,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                             type="button"
                             className={`w-5 h-5 rounded-md flex items-center justify-center transition-all ${
                               act.completed
-                                ? 'bg-[#10B981] text-white shadow-xs'
+                                ? 'bg-[#008751] text-white shadow-xs'
                                 : 'border-2 border-slate-300 bg-white'
                             }`}
                           >
@@ -438,7 +438,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                               {act.deadline}
                             </span>
                           )}
-                          <div className="w-6 h-6 rounded-full bg-[#2F45EE] text-white text-[10px] font-bold flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full bg-[#008751] text-white text-[10px] font-bold flex items-center justify-center">
                             {initial}
                           </div>
                         </div>
@@ -457,7 +457,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
             <div className="pt-3 flex items-center gap-3">
               <button
                 onClick={() => onExport && onExport('markdown')}
-                className="flex-1 bg-[#2F45EE] hover:bg-[#2537D8] text-white py-3 px-4 rounded-2xl font-semibold text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-500/20 touch-press cursor-pointer transition-all active:scale-98"
+                className="flex-1 bg-[#008751] hover:bg-[#007043] text-white py-3 px-4 rounded-2xl font-semibold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-700/20 touch-press cursor-pointer transition-all active:scale-98"
               >
                 <Share2 className="w-4 h-4" />
                 <span>Share Summary</span>
@@ -481,7 +481,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
               <div className="flex items-center gap-3.5">
                 <button
                   onClick={togglePlay}
-                  className="w-12 h-12 rounded-full bg-[#2F45EE] hover:bg-[#2537D8] text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
+                  className="w-12 h-12 rounded-full bg-[#008751] hover:bg-[#007043] text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-700/20 active:scale-95 transition-all cursor-pointer"
                   title={isPlayingAudio ? 'Pause Audio' : 'Play Audio'}
                 >
                   {isPlayingAudio ? (
@@ -521,7 +521,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
 
               {/* Time Indicators + Speed Pill */}
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono pt-1">
-                <span className={isPlayingAudio ? 'text-[#2F45EE] font-semibold' : ''}>
+                <span className={isPlayingAudio ? 'text-[#008751] font-semibold' : ''}>
                   {formatPlaybackTime(playbackSeconds)}
                 </span>
                 <button
@@ -570,7 +570,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                     <div className="space-y-2 text-left">
                       {session.live_transcript.map((item, idx) => (
                         <div key={idx} className="bg-white p-3 rounded-xl border border-slate-100">
-                          <span className="text-xs font-bold text-[#2F45EE] block mb-1">
+                          <span className="text-xs font-bold text-[#008751] block mb-1">
                             {item.speaker_label || 'Speaker'}
                           </span>
                           <p className="text-sm text-slate-800">{item.text}</p>
@@ -592,8 +592,8 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                       key={seg.id}
                       className={`rounded-2xl p-3.5 border transition-all flex items-start gap-3 ${
                         isActiveSegment
-                          ? 'bg-indigo-50/40 border-[#2F45EE]/40 shadow-sm ring-1 ring-[#2F45EE]/20'
-                          : 'bg-white border-slate-100/90 shadow-xs hover:border-indigo-100'
+                          ? 'bg-emerald-50/50 border-[#008751]/40 shadow-sm ring-1 ring-[#008751]/20'
+                          : 'bg-white border-slate-100/90 shadow-xs hover:border-emerald-100'
                       }`}
                     >
                       <div
@@ -608,7 +608,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                           </span>
                           <button
                             onClick={() => seekToTime(seg.start)}
-                            className="text-xs text-slate-400 hover:text-[#2F45EE] font-mono cursor-pointer flex items-center gap-1 transition-colors"
+                            className="text-xs text-slate-400 hover:text-[#008751] font-mono cursor-pointer flex items-center gap-1 transition-colors"
                             title={`Jump audio to ${formatPlaybackTime(seg.start)}`}
                           >
                             <Play className="w-2.5 h-2.5 fill-current opacity-70" />
