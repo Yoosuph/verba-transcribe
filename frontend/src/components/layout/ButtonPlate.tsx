@@ -1,7 +1,7 @@
 import {
   Menu,
   FileText,
-  CheckSquare,
+  Gavel,
   Scale,
 } from 'lucide-react';
 
@@ -11,7 +11,7 @@ interface ButtonPlateProps {
   activePage: AppPage;
   onNavigate: (page: AppPage) => void;
   hasSession: boolean;
-  actionCount: number;
+  actionCount?: number;
   theme?: 'light' | 'royal';
 }
 
@@ -19,7 +19,6 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
   activePage,
   onNavigate,
   hasSession,
-  actionCount,
   theme = 'light',
 }) => {
   const isRoyal = theme === 'royal';
@@ -36,7 +35,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
       : -1;
 
   return (
-    <div className="w-full px-3 pb-3 pt-1 z-50 flex-shrink-0 select-none no-print">
+    <div className="w-full px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 z-50 flex-shrink-0 select-none no-print">
       <nav
         className={`w-full rounded-2xl p-1.5 flex items-center justify-between gap-1 shadow-xl transition-all duration-300 relative ${
           isRoyal
@@ -63,7 +62,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
         {/* 1. Meetings */}
         <button
           onClick={() => onNavigate('meetings')}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-2 rounded-xl transition-all duration-200 touch-press ${
+          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 touch-press ${
             activePage === 'meetings'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
@@ -75,12 +74,12 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           title="Court Proceedings"
         >
           <Menu className={`w-4 h-4 transition-transform duration-200 ${activePage === 'meetings' ? 'scale-110' : 'scale-100'}`} />
-          <span className="text-[11px] mt-1 tracking-tight font-medium">
-            Proceedings
+          <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
+            Hearings
           </span>
         </button>
 
-        {/* 2. Transcript & Notes */}
+        {/* 2. Transcript & Record */}
         <button
           onClick={() => onNavigate('transcript')}
           disabled={!hasSession}
@@ -95,7 +94,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
               ? 'text-white/75 hover:text-white'
               : 'text-slate-500 hover:text-slate-900'
           }`}
-          title="Court Transcript & Record"
+          title="Court Transcript & Audio Record"
         >
           <FileText className={`w-4 h-4 transition-transform duration-200 ${activePage === 'transcript' || activePage === 'summary' ? 'scale-110' : 'scale-100'}`} />
           <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
@@ -118,7 +117,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
               ? 'text-white/75 hover:text-white'
               : 'text-slate-500 hover:text-slate-900'
           }`}
-          title="Judicial Hearing Report & PDF Export"
+          title="Judicial Hearing Report & PDF / DOCX Export"
         >
           <Scale className={`w-4 h-4 transition-transform duration-200 ${activePage === 'report' ? 'scale-110' : 'scale-100'}`} />
           <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
@@ -126,10 +125,10 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           </span>
         </button>
 
-        {/* 4. Actions */}
+        {/* 4. Court Orders */}
         <button
           onClick={() => onNavigate('actions')}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-2 rounded-xl transition-all duration-200 touch-press ${
+          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 touch-press ${
             activePage === 'actions'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
@@ -138,25 +137,10 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
               ? 'text-white/75 hover:text-white'
               : 'text-slate-500 hover:text-slate-900'
           }`}
-          title="Orders & Actions"
+          title="Official Court Orders & Adjournment"
         >
-          <div className="relative">
-            <CheckSquare className={`w-4 h-4 transition-transform duration-200 ${activePage === 'actions' ? 'scale-110' : 'scale-100'}`} />
-            {actionCount > 0 && (
-              <span className={`absolute -top-1 -right-2.5 px-1 py-0.2 rounded-full text-[9px] font-bold leading-none transition-colors duration-200 ${
-                activePage === 'actions'
-                  ? isRoyal
-                    ? 'bg-[#008751] text-white'
-                    : 'bg-white text-[#008751]'
-                  : isRoyal
-                  ? 'bg-white text-[#008751]'
-                  : 'bg-[#008751] text-white'
-              }`}>
-                {actionCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[11px] mt-1 tracking-tight font-medium">
+          <Gavel className={`w-4 h-4 transition-transform duration-200 ${activePage === 'actions' ? 'scale-110' : 'scale-100'}`} />
+          <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
             Orders
           </span>
         </button>

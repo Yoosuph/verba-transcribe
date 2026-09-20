@@ -166,9 +166,9 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
   if (!report) return null;
 
   return (
-    <div className="flex-1 flex flex-col bg-[#EAEEEC] text-slate-900 overflow-hidden relative print:bg-white print:overflow-visible">
-      {/* Top Floating Control Bar (Hidden on print) */}
-      <div className="no-print bg-white/95 backdrop-blur-md border-b border-emerald-950/10 px-4 py-3 flex-shrink-0 z-30 flex items-center justify-between shadow-xs">
+    <div className="flex-1 min-h-0 flex flex-col bg-[#EAEEEC] text-slate-900 overflow-hidden relative print:bg-white print:overflow-visible">
+      {/* Top Control Bar (Hidden on print) */}
+      <div className="no-print bg-white/95 backdrop-blur-md border-b border-emerald-950/10 px-3 sm:px-5 py-2.5 flex-shrink-0 z-30 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
@@ -179,29 +179,29 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
           </button>
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#008751] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
-              Judicial Report
+              Judicial Hearing Report
             </span>
-            <h2 className="text-xs font-bold text-slate-900 truncate max-w-[200px] sm:max-w-xs mt-0.5">
+            <h2 className="text-xs font-bold text-slate-900 truncate max-w-[170px] sm:max-w-xs mt-0.5 font-mono">
               {report.case.case_number}
             </h2>
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Top Action Buttons */}
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyMarkdown}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer"
+            className="hidden sm:inline-flex px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-medium transition-all items-center gap-1.5 cursor-pointer"
             title="Copy Markdown"
           >
             {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{copySuccess ? 'Copied' : 'Copy'}</span>
+            <span>{copySuccess ? 'Copied' : 'Copy'}</span>
           </button>
 
           <button
             onClick={handleDownloadDocx}
-            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-900 border border-emerald-200 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
-            title="Download Word Document"
+            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-950 border border-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Download Word Document (.docx)"
           >
             <FileDown className="w-3.5 h-3.5 text-[#008751]" />
             <span>Word (.docx)</span>
@@ -209,17 +209,60 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
 
           <button
             onClick={handlePrint}
-            className="px-3.5 py-1.5 rounded-lg bg-[#008751] hover:bg-[#007043] active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-700/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-2 rounded-xl bg-[#008751] hover:bg-[#007043] active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-700/25 transition-all flex items-center gap-1.5 cursor-pointer"
             title="Export or Print Official PDF"
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Export PDF</span>
+            <span>Save PDF</span>
           </button>
         </div>
       </div>
 
       {/* Main Document Body (Scrollable in browser, paged in print) */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 print:p-0 print:overflow-visible">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 pb-36 print:p-0 print:overflow-visible">
+        {/* Prominent Action Export Card Banner (No print) */}
+        <div className="max-w-4xl mx-auto mb-5 p-4 sm:p-5 rounded-2xl bg-[#042A1D] text-white flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl border border-emerald-500/20 no-print">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-white/10 flex items-center justify-center border border-white/20 flex-shrink-0">
+              <Scale className="w-6 h-6 text-emerald-300" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-bold uppercase tracking-widest bg-emerald-400/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-400/30">
+                  Certified Hearing Report
+                </span>
+                <span className="text-xs text-emerald-200/90 font-mono font-bold">{report.case.case_number}</span>
+              </div>
+              <h3 className="text-sm font-bold text-white mt-0.5">
+                Save & Export Official Hearing Report
+              </h3>
+              <p className="text-[11px] text-emerald-200/70">
+                Ready to download as an editable Microsoft Word document or save as high-res PDF.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <button
+              onClick={handleDownloadDocx}
+              className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-950 font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              title="Download editable Microsoft Word document (.docx)"
+            >
+              <FileDown className="w-4 h-4 text-[#008751]" />
+              <span>Save Word (.docx)</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007043] border border-white/25 text-white font-bold text-xs shadow-md shadow-emerald-950/40 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              title="Save as PDF or Print"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Save as PDF</span>
+            </button>
+          </div>
+        </div>
+
         {/* Printable Official Court Sheet Container */}
         <article
           id="judicial-hearing-report"
@@ -616,6 +659,29 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
               )}
             </section>
           )}
+
+          {/* Document Footer Actions (No print) */}
+          <div className="no-print mt-8 pt-6 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs text-slate-500 italic">
+              Official judicial record • End of hearing proceedings report.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadDocx}
+                className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-950 text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <FileDown className="w-3.5 h-3.5 text-[#008751]" />
+                <span>Save Word (.docx)</span>
+              </button>
+              <button
+                onClick={handlePrint}
+                className="px-4 py-2 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Save as PDF / Print</span>
+              </button>
+            </div>
+          </div>
 
           {/* Document Footer (Visible on print) */}
           <div className="mt-8 pt-4 border-t border-slate-200 text-center text-[10px] italic text-slate-400 print:block">

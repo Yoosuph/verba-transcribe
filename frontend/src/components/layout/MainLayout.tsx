@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PhoneFrame } from '../phone/PhoneFrame';
 import { ButtonPlate, type AppPage } from './ButtonPlate';
 
@@ -14,7 +14,7 @@ import { updateCaseInfo } from '../../services/api';
 import { Mic, FileText, FileCheck, Scale, Plus, Gavel } from 'lucide-react';
 import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
-const LOCAL_STORAGE_KEY = 'verba_user_sessions_v1';
+const LOCAL_STORAGE_KEY = 'judicial_hearings_sessions_v2';
 
 const PAGE_ORDER: Record<string, number> = {
   meetings: 0,
@@ -221,24 +221,19 @@ export const MainLayout: React.FC = () => {
     navigateTo('transcript', 'forward');
   };
 
-  // Compute total uncompleted action items across all sessions
-  const totalActionCount = useMemo(() => {
-    return sessions.reduce((acc, s) => {
-      return acc + (s.summary?.action_items?.filter((a) => !a.completed).length || 0);
-    }, 0);
-  }, [sessions]);
+
 
   // Determine theme for current page
   const pageTheme = activePage === 'live' && status === 'recording' ? 'royal' : 'light';
   const effectiveSession = selectedSession || (sessions.length > 0 ? sessions[0] : null);
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden relative selection:bg-[#008751]/30 font-sans">
+    <div className="fixed inset-0 w-full h-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden select-none selection:bg-[#008751]/30 font-sans">
       {/* Subtle Nigerian National Flag Tricolor Accent Ribbon */}
       <div className="w-full h-1 nigerian-tricolor flex-shrink-0 z-50 no-print" />
 
       {/* Main Responsive App Body */}
-      <main className="flex-1 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
+      <main className="flex-1 min-h-0 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
         {/* Floating Minimal Judicial Header Bar */}
         {activePage !== 'live' && (
           <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-6 z-40 no-print flex justify-center pointer-events-none">
@@ -308,7 +303,9 @@ export const MainLayout: React.FC = () => {
           {/* Content Body Area with fluid directional motion */}
           <div
             key={activePage}
-            className={`flex-1 flex flex-col overflow-hidden relative ${
+            className={`flex-1 min-h-0 flex flex-col overflow-hidden relative ${
+              activePage !== 'live' ? 'pt-[68px] sm:pt-[74px]' : ''
+            } ${
               navDirection === 'forward'
                 ? 'page-enter-forward'
                 : navDirection === 'backward'
@@ -456,7 +453,6 @@ export const MainLayout: React.FC = () => {
             activePage={activePage}
             onNavigate={(page) => navigateTo(page)}
             hasSession={Boolean(effectiveSession)}
-            actionCount={totalActionCount}
             theme={pageTheme}
           />
         </PhoneFrame>

@@ -133,13 +133,29 @@
   will-change: transform, opacity;
 }
 
-/* Reduced motion preference support */
-@media (prefers-reduced-motion: reduce) {
-  .page-enter-forward,
-  .page-enter-backward,
-  .page-enter-up,
-  .page-enter-fade {
-    animation: none !important;
+/* Print styles for judicial hearing report export */
+@media print {
+  body {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    size: A4;
+    margin: 14mm 14mm 14mm 14mm;
+  }
+  article#judicial-hearing-report {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
 

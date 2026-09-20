@@ -39,9 +39,9 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
   ];
 
   return (
-    <div className="flex-1 flex flex-col bg-[#F8FAFC] text-slate-900 overflow-hidden relative">
+    <div className="flex-1 min-h-0 flex flex-col bg-[#F8FAFC] text-slate-900 overflow-hidden relative">
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto px-5 pt-12 pb-28 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-2 sm:pt-4 pb-32 space-y-4">
         {/* Header: Title + Judicial Badge */}
         <div className="flex items-center justify-between pt-1">
           <div>
