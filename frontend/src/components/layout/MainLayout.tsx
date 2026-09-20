@@ -6,9 +6,12 @@ import { MeetingsListView } from '../views/MeetingsListView';
 import { LiveRecordingView } from '../views/LiveRecordingView';
 import { MeetingDetailView } from '../views/MeetingDetailView';
 import { GlobalActionsView } from '../views/GlobalActionsView';
+import { HearingReportView } from '../views/HearingReportView';
+import { NewHearingModal } from '../views/NewHearingModal';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
-import type { SessionState, MeetingSummary } from '../../types/transcription';
-import { Mic, FileText, FileCheck } from 'lucide-react';
+import type { SessionState, MeetingSummary, CaseInformation, HearingParties } from '../../types/transcription';
+import { updateCaseInfo } from '../../services/api';
+import { Mic, FileText, FileCheck, Scale, Plus, Gavel } from 'lucide-react';
 import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
 const LOCAL_STORAGE_KEY = 'verba_user_sessions_v1';
@@ -17,8 +20,27 @@ const PAGE_ORDER: Record<string, number> = {
   meetings: 0,
   transcript: 1,
   summary: 1,
-  actions: 2,
-  live: 3,
+  report: 2,
+  actions: 3,
+  live: 4,
+};
+
+const DEFAULT_CASE_INFO: CaseInformation = {
+  case_number: 'FHC/KN/CS/1042/2026',
+  court: 'Federal High Court, Kano',
+  judge: 'Hon. Justice M. S. Abubakar',
+  hearing_date: '21 September 2026',
+  hearing_type: 'Motion Hearing',
+  duration: '00:00:00',
+  hearing_no: '4',
+};
+
+const DEFAULT_PARTIES: HearingParties = {
+  claimant: 'ABC Limited',
+  counsel_claimant: 'Barr. Ibrahim Gambo',
+  defendant: 'XYZ Limited',
+  counsel_defendant: 'Barr. Aisha Bello',
+  witnesses: ['PW1 — Aliyu Mohammed', 'DW1 — Zainab Garba'],
 };
 
 export const MainLayout: React.FC = () => {
@@ -46,6 +68,11 @@ export const MainLayout: React.FC = () => {
   // Active page state for universal navigation
   const [activePage, setActivePage] = useState<AppPage>('meetings');
   const [navDirection, setNavDirection] = useState<'forward' | 'backward' | 'up' | 'fade'>('fade');
+
+  // Case setup state
+  const [activeCaseInfo, setActiveCaseInfo] = useState<CaseInformation>(DEFAULT_CASE_INFO);
+  const [activeParties, setActiveParties] = useState<HearingParties>(DEFAULT_PARTIES);
+  const [isNewHearingModalOpen, setIsNewHearingModalOpen] = useState(false);
 
   const navigateTo = (newPage: AppPage, customDir?: 'forward' | 'backward' | 'up' | 'fade') => {
     if (newPage === activePage) return;
@@ -119,12 +146,11 @@ export const MainLayout: React.FC = () => {
     }
   }, [status]);
 
-  // When post-recording processing finishes, save session and jump to 'transcript'
+  // When post-recording processing finishes, save session and jump to 'report'
   useEffect(() => {
     if (status === 'complete') {
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const dateStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
       const finalSessionSummary: MeetingSummary = summary || {
         executive_summary: liveTranscript.length > 0
@@ -137,9 +163,7 @@ export const MainLayout: React.FC = () => {
         speaker_contributions: [],
       };
 
-      const meetingTitle = summary?.executive_summary
-        ? (summary.executive_summary.length > 45 ? summary.executive_summary.slice(0, 42).trim() + '...' : summary.executive_summary)
-        : `Meeting · ${dateStr}, ${timeStr}`;
+      const meetingTitle = `${activeCaseInfo.case_number} · ${activeCaseInfo.court}`;
 
       const newSession: SessionState = {
         id: sessionId || `session_${Date.now()}`,
@@ -152,21 +176,32 @@ export const MainLayout: React.FC = () => {
         live_transcript: liveTranscript,
         final_transcript: finalTranscript || undefined,
         summary: finalSessionSummary,
+        case_info: activeCaseInfo,
+        parties: activeParties,
         speaker_names: {},
       };
+
+      // Persist case info to backend session
+      if (sessionId) {
+        updateCaseInfo(sessionId, activeCaseInfo, activeParties).catch((err) =>
+          console.warn('Auto case update failed:', err)
+        );
+      }
 
       setSessions((prev) => [newSession, ...prev.filter((s) => s.id !== newSession.id)]);
       setSelectedSession(newSession);
 
-      // Brief delay so the user clearly perceives the 100% complete state before switching
+      // Brief delay so the user clearly perceives the 100% complete state before switching to report
       const timer = setTimeout(() => {
-        navigateTo('transcript', 'forward');
+        navigateTo('report', 'forward');
       }, 750);
       return () => clearTimeout(timer);
     }
-  }, [status, summary, sessionId, recordingSeconds, languageMode, liveTranscript, finalTranscript]);
+  }, [status, summary, sessionId, recordingSeconds, languageMode, liveTranscript, finalTranscript, activeCaseInfo, activeParties]);
 
-  const handleStartRecording = () => {
+  const handleStartHearingWithCase = (caseInfo: CaseInformation, parties: HearingParties) => {
+    setActiveCaseInfo(caseInfo);
+    setActiveParties(parties);
     startSession(languageMode);
     navigateTo('live', 'up');
   };
@@ -177,6 +212,12 @@ export const MainLayout: React.FC = () => {
 
   const handleSelectMeeting = (session: SessionState) => {
     setSelectedSession(session);
+    if (session.case_info) {
+      setActiveCaseInfo(session.case_info);
+    }
+    if (session.parties) {
+      setActiveParties(session.parties);
+    }
     navigateTo('transcript', 'forward');
   };
 
@@ -194,15 +235,70 @@ export const MainLayout: React.FC = () => {
   return (
     <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden relative selection:bg-[#008751]/30 font-sans">
       {/* Subtle Nigerian National Flag Tricolor Accent Ribbon */}
-      <div className="w-full h-1 nigerian-tricolor flex-shrink-0 z-50" />
+      <div className="w-full h-1 nigerian-tricolor flex-shrink-0 z-50 no-print" />
 
-      {/* Main Responsive App Body: Fills the rest of the browser window smoothly */}
+      {/* Main Responsive App Body */}
       <main className="flex-1 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
-        {/* Floating Minimal Header: centered emblem, no text, no live session badge */}
+        {/* Floating Minimal Judicial Header Bar */}
         {activePage !== 'live' && (
-          <div className="absolute top-3 left-0 right-0 flex justify-center z-40 pointer-events-none">
-            <header className="pointer-events-auto inline-flex items-center justify-center p-1 px-2.5 rounded-full bg-white/85 hover:bg-white backdrop-blur-md border border-slate-200/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] hover:shadow-md transition-all active:scale-95 cursor-default" title="Judicial Emblem">
-              <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+          <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-6 z-40 no-print flex justify-center pointer-events-none">
+            <header className="pointer-events-auto w-full max-w-4xl bg-white/92 hover:bg-white backdrop-blur-md border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.06)] rounded-2xl px-3 sm:px-4 py-2 flex items-center justify-between transition-all">
+              {/* Left: Emblem & Court Title */}
+              <div
+                onClick={() => navigateTo('meetings', 'backward')}
+                className="flex items-center gap-2.5 cursor-pointer select-none active:scale-95 transition-all"
+                title="View All Court Proceedings"
+              >
+                <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+                <div>
+                  <h1 className="text-xs sm:text-sm font-bold tracking-tight text-slate-900 leading-tight">
+                    Federal High Court
+                  </h1>
+                  <p className="text-[10px] text-slate-500 leading-none hidden sm:block">
+                    Kano Judicial Division
+                  </p>
+                </div>
+              </div>
+
+              {/* Center: Active Suit Number Badge */}
+              <button
+                onClick={() => setIsNewHearingModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-[11px] font-semibold text-slate-800 transition-all cursor-pointer active:scale-95"
+                title="Edit / Configure Case Information"
+              >
+                <Gavel className="w-3 h-3 text-[#008751]" />
+                <span className="font-mono truncate max-w-[120px] sm:max-w-[190px]">
+                  {effectiveSession?.case_info?.case_number || activeCaseInfo.case_number}
+                </span>
+              </button>
+
+              {/* Right: Actions */}
+              <div className="flex items-center gap-2">
+                {effectiveSession && (
+                  <button
+                    onClick={() => navigateTo('report', 'forward')}
+                    className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 ${
+                      activePage === 'report'
+                        ? 'bg-emerald-100 text-emerald-950 border border-emerald-300 font-bold'
+                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                    title="View Judicial Hearing Report"
+                  >
+                    <Scale className="w-3.5 h-3.5 text-[#008751]" />
+                    <span>Report</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setIsNewHearingModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
+                  title="Configure & Record New Hearing"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">New Hearing</span>
+                  <span className="sm:hidden">New</span>
+                </button>
+              </div>
             </header>
           </div>
         )}
@@ -222,119 +318,170 @@ export const MainLayout: React.FC = () => {
                 : 'page-enter-fade'
             }`}
           >
-          {/* 1. Meetings Page */}
-          {activePage === 'meetings' && (
-            <MeetingsListView
-              sessions={sessions}
-              onSelectMeeting={handleSelectMeeting}
-              onStartRecord={handleStartRecording}
-            />
-          )}
-
-          {/* 2. Live Recording Page */}
-          {activePage === 'live' && (
-            <LiveRecordingView
-              title={status === 'recording' ? 'Live Recording' : status === 'processing' ? 'Processing Recording' : 'Audio Stream'}
-              recordingSeconds={recordingSeconds}
-              liveTranscript={liveTranscript}
-              interimText={interimText}
-              analyserNode={analyserNode}
-              isPaused={isPaused}
-              isProcessing={status === 'processing'}
-              processingStage={processingStage}
-              errorMessage={errorMessage}
-              onPause={pauseRecording}
-              onResume={resumeRecording}
-              onMinimize={() => navigateTo('meetings', 'backward')}
-              onStop={handleStopRecording}
-              onViewTranscript={() => navigateTo('transcript', 'forward')}
-              languageMode={languageMode}
-            />
-          )}
-
-          {/* 3. Transcript Page */}
-          {activePage === 'transcript' && (
-            effectiveSession ? (
-              <MeetingDetailView
-                session={effectiveSession}
-                initialTab="summary"
-                onBack={() => navigateTo('meetings', 'backward')}
-                onToggleActionItem={toggleActionItem}
-                onExport={exportSession}
+            {/* 1. Meetings Page */}
+            {activePage === 'meetings' && (
+              <MeetingsListView
+                sessions={sessions}
+                onSelectMeeting={handleSelectMeeting}
+                onStartRecord={() => setIsNewHearingModalOpen(true)}
               />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
-                <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                  <FileText className="w-7 h-7" />
-                </div>
-                <h3 className="text-base font-bold text-slate-900">No Transcript Yet</h3>
-                <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                  Record a meeting or select an existing session from Meetings to inspect its speaker-diarized transcript and playback.
-                </p>
-                <button
-                  onClick={handleStartRecording}
-                  className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5"
-                >
-                  <Mic className="w-3.5 h-3.5" />
-                  <span>Start Recording</span>
-                </button>
-              </div>
-            )
-          )}
+            )}
 
-          {/* 4. Summary Page */}
-          {activePage === 'summary' && (
-            effectiveSession ? (
-              <MeetingDetailView
-                session={effectiveSession}
-                initialTab="summary"
-                onBack={() => navigateTo('meetings', 'backward')}
-                onToggleActionItem={toggleActionItem}
-                onExport={exportSession}
+            {/* 2. Live Recording Page */}
+            {activePage === 'live' && (
+              <LiveRecordingView
+                title={status === 'recording' ? 'Live Hearing Recording' : status === 'processing' ? 'Processing Recording' : 'Audio Stream'}
+                recordingSeconds={recordingSeconds}
+                liveTranscript={liveTranscript}
+                interimText={interimText}
+                analyserNode={analyserNode}
+                isPaused={isPaused}
+                isProcessing={status === 'processing'}
+                processingStage={processingStage}
+                errorMessage={errorMessage}
+                onPause={pauseRecording}
+                onResume={resumeRecording}
+                onMinimize={() => navigateTo('meetings', 'backward')}
+                onStop={handleStopRecording}
+                onViewTranscript={() => navigateTo('report', 'forward')}
+                languageMode={languageMode}
               />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
-                <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                  <FileCheck className="w-7 h-7" />
+            )}
+
+            {/* 3. Transcript Page */}
+            {activePage === 'transcript' && (
+              effectiveSession ? (
+                <MeetingDetailView
+                  session={effectiveSession}
+                  initialTab="summary"
+                  onBack={() => navigateTo('meetings', 'backward')}
+                  onToggleActionItem={toggleActionItem}
+                  onExport={exportSession}
+                  onOpenReport={() => navigateTo('report', 'forward')}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                    <FileText className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">No Transcript Yet</h3>
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                    Record a hearing or select an existing session from Proceedings to inspect its speaker-diarized transcript and playback.
+                  </p>
+                  <button
+                    onClick={() => setIsNewHearingModalOpen(true)}
+                    className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Start Hearing</span>
+                  </button>
                 </div>
-                <h3 className="text-base font-bold text-slate-900">No Summary Yet</h3>
-                <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
-                  Once a recording concludes, an executive summary, decisions, and action items will be generated here.
-                </p>
-                <button
-                  onClick={handleStartRecording}
-                  className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5"
-                >
-                  <Mic className="w-3.5 h-3.5" />
-                  <span>Start Recording</span>
-                </button>
-              </div>
-            )
-          )}
+              )
+            )}
 
-          {/* 5. Actions Page */}
-          {activePage === 'actions' && (
-            <GlobalActionsView
-              sessions={sessions}
-              onBack={() => navigateTo('meetings', 'backward')}
-              onSelectMeeting={(session) => {
-                setSelectedSession(session);
-                navigateTo('transcript', 'forward');
-              }}
-            />
-          )}
-        </div>
+            {/* 4. Judicial Hearing Report Page */}
+            {activePage === 'report' && (
+              effectiveSession ? (
+                <HearingReportView
+                  session={effectiveSession}
+                  onBack={() => navigateTo('transcript', 'backward')}
+                  onJumpToTimestamp={() => navigateTo('transcript', 'backward')}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
+                  <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center text-[#008751] border border-emerald-200">
+                    <Scale className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">No Hearing Report Yet</h3>
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                    Start a hearing recording or select an existing proceeding to synthesize an authoritative 12-section Judicial Hearing Report with PDF & Word export.
+                  </p>
+                  <button
+                    onClick={() => setIsNewHearingModalOpen(true)}
+                    className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Setup New Hearing</span>
+                  </button>
+                </div>
+              )
+            )}
 
-        {/* Universal Floating Button Plate (Docked at bottom of ALL pages!) */}
-        <ButtonPlate
-          activePage={activePage}
-          onNavigate={(page) => navigateTo(page)}
-          hasSession={Boolean(effectiveSession)}
-          actionCount={totalActionCount}
-          theme={pageTheme}
-        />
-      </PhoneFrame>
-    </main>
-  </div>
-);
+            {/* 5. Summary Page */}
+            {activePage === 'summary' && (
+              effectiveSession ? (
+                <MeetingDetailView
+                  session={effectiveSession}
+                  initialTab="summary"
+                  onBack={() => navigateTo('meetings', 'backward')}
+                  onToggleActionItem={toggleActionItem}
+                  onExport={exportSession}
+                  onOpenReport={() => navigateTo('report', 'forward')}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                    <FileCheck className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">No Summary Yet</h3>
+                  <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                    Once a recording concludes, an executive summary, decisions, and action items will be generated here.
+                  </p>
+                  <button
+                    onClick={() => setIsNewHearingModalOpen(true)}
+                    className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    <span>Start Hearing</span>
+                  </button>
+                </div>
+              )
+            )}
+
+            {/* 6. Actions Page */}
+            {activePage === 'actions' && (
+              <GlobalActionsView
+                sessions={sessions}
+                onBack={() => navigateTo('meetings', 'backward')}
+                onSelectMeeting={(session) => {
+                  setSelectedSession(session);
+                  navigateTo('transcript', 'forward');
+                }}
+              />
+            )}
+          </div>
+
+          {/* Universal Floating Button Plate (Docked at bottom of ALL pages!) */}
+          <ButtonPlate
+            activePage={activePage}
+            onNavigate={(page) => navigateTo(page)}
+            hasSession={Boolean(effectiveSession)}
+            actionCount={totalActionCount}
+            theme={pageTheme}
+          />
+        </PhoneFrame>
+      </main>
+
+      {/* New Hearing Setup Modal */}
+      <NewHearingModal
+        isOpen={isNewHearingModalOpen}
+        onClose={() => setIsNewHearingModalOpen(false)}
+        initialCaseInfo={effectiveSession?.case_info || activeCaseInfo}
+        initialParties={effectiveSession?.parties || activeParties}
+        onStartHearing={handleStartHearingWithCase}
+        onSaveCaseInfo={(caseInfo, parties) => {
+          setActiveCaseInfo(caseInfo);
+          setActiveParties(parties);
+          if (effectiveSession) {
+            updateCaseInfo(effectiveSession.id, caseInfo, parties)
+              .then((updated) => {
+                setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                setSelectedSession(updated);
+              })
+              .catch((err) => console.warn('Case info update:', err));
+          }
+        }}
+      />
+    </div>
+  );
 };

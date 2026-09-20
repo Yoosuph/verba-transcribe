@@ -11,13 +11,22 @@ from app.models.transcription import (
     FinalTranscriptData,
     MeetingSummary,
     AskRequest,
-    AskResponse
+    AskResponse,
+    UpdateCaseInfoRequest,
+    JudicialHearingReport,
+    CaseInformation,
+    HearingParties,
+    TranscriptSegment
 )
 from app.services.session_manager import session_manager
 from app.services.gemini_transcribe import gemini_final_transcriber
 from app.services.summarizer import meeting_summarizer
+from app.services.docx_exporter import generate_judicial_docx
 from app.config import settings
 from google import genai
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -112,6 +121,17 @@ async def process_complete_audio(
         summary = await meeting_summarizer.summarize_transcript(final_transcript)
         session_manager.set_summary(session_id, summary)
 
+        # Generate official Judicial Hearing Report
+        try:
+            report = await meeting_summarizer.generate_hearing_report(
+                transcript_data=final_transcript,
+                case_info=session.case_info,
+                parties=session.parties
+            )
+            session_manager.set_hearing_report(session_id, report)
+        except Exception as rep_err:
+            logger.warning(f"Hearing report generation warning: {rep_err}")
+
         return session_manager.get(session_id)
     except Exception as e:
         session_manager.set_error(session_id, str(e))
@@ -203,13 +223,93 @@ async def ask_about_meeting(session_id: str, request: AskRequest):
     except Exception as e:
         return AskResponse(answer=f"Could not answer question: {str(e)}", evidence_segment_ids=[])
 
-@router.get("/{session_id}/export")
+@router.put("/{session_id}/case-info", response_model=SessionState)
+async def update_case_info(session_id: str, request: UpdateCaseInfoRequest):
+    """Updates case information and parties/counsel for a court hearing session."""
+    session = session_manager.update_case_info(session_id, request.case, request.parties)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
 
-async def export_session(session_id: str, format: str = Query("markdown", pattern="^(markdown|txt|json)$")):
-    """Exports session transcript and summary in Markdown, TXT, or JSON."""
+@router.post("/{session_id}/report", response_model=JudicialHearingReport)
+async def generate_report_endpoint(session_id: str):
+    """Generates an authoritative, 12-section Judicial Hearing Report for the session."""
     session = session_manager.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    transcript_data = session.final_transcript
+    if not transcript_data or not transcript_data.segments:
+        # Fall back to live transcript segments if final is not present yet
+        segments = []
+        if session.live_transcript:
+            for idx, item in enumerate(session.live_transcript):
+                segments.append(
+                    TranscriptSegment(
+                        id=item.id or f"live_{idx}",
+                        start=idx * 5.0,
+                        end=(idx + 1) * 5.0,
+                        speaker=item.speaker_label or f"Speaker {idx % 2 + 1}",
+                        text=item.text
+                    )
+                )
+        transcript_data = FinalTranscriptData(
+            session_id=session_id,
+            language=session.language_mode or "en",
+            segments=segments
+        )
+
+    report = await meeting_summarizer.generate_hearing_report(
+        transcript_data=transcript_data,
+        case_info=session.case_info,
+        parties=session.parties
+    )
+    session_manager.set_hearing_report(session_id, report)
+    return report
+
+@router.get("/{session_id}/report", response_model=JudicialHearingReport)
+async def get_report_endpoint(session_id: str):
+    """Retrieves the generated Judicial Hearing Report for the session."""
+    session = session_manager.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not session.hearing_report:
+        # Auto-generate if transcript is available
+        if (session.final_transcript and session.final_transcript.segments) or session.live_transcript:
+            return await generate_report_endpoint(session_id)
+        raise HTTPException(status_code=404, detail="Hearing report not yet generated")
+    return session.hearing_report
+
+@router.get("/{session_id}/export/docx")
+async def export_report_docx(session_id: str):
+    """Exports the complete Judicial Hearing Report as a formatted Microsoft Word (.docx) document."""
+    session = session_manager.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    report = session.hearing_report
+    if not report:
+        report = await generate_report_endpoint(session_id)
+
+    docx_buffer = generate_judicial_docx(report)
+    clean_suit = (report.case.case_number or session_id).replace("/", "_").replace(" ", "_")
+    filename = f"Hearing_Report_{clean_suit}.docx"
+
+    return Response(
+        content=docx_buffer.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+@router.get("/{session_id}/export")
+async def export_session(session_id: str, format: str = Query("markdown", pattern="^(markdown|txt|json|docx)$")):
+    """Exports session transcript and summary in Markdown, TXT, JSON, or DOCX."""
+    session = session_manager.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if format == "docx":
+        return await export_report_docx(session_id)
 
     if format == "json":
         return Response(

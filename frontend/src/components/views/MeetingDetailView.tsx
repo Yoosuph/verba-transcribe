@@ -9,6 +9,7 @@ import {
   Play,
   Pause,
   FileCheck,
+  Scale,
 } from 'lucide-react';
 import type { SessionState, ActionItem } from '../../types/transcription';
 
@@ -17,6 +18,7 @@ interface MeetingDetailViewProps {
   onBack: () => void;
   onToggleActionItem?: (actionId: string, completed: boolean) => void;
   onExport?: (format: 'markdown' | 'txt' | 'json') => void;
+  onOpenReport?: () => void;
   initialTab?: 'summary' | 'transcript' | 'actions';
 }
 
@@ -25,6 +27,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
   onBack,
   onToggleActionItem,
   onExport,
+  onOpenReport,
   initialTab = 'summary',
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'actions'>(initialTab);
@@ -218,14 +221,25 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
         </h2>
 
         <div className="flex items-center gap-2">
+          {onOpenReport && (
+            <button
+              onClick={onOpenReport}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-[#008751] text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-xs"
+              title="View Judicial Hearing Report"
+            >
+              <Scale className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Hearing Report</span>
+              <span className="sm:hidden">Report</span>
+            </button>
+          )}
           <button
             onClick={() => onExport && onExport('markdown')}
-            className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700"
+            className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700 cursor-pointer"
             title="Export Official Record"
           >
             <Share2 className="w-4 h-4" />
           </button>
-          <button className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700">
+          <button className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700 cursor-pointer">
             <MoreHorizontal className="w-4 h-4" />
           </button>
         </div>

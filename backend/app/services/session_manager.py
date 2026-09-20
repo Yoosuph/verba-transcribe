@@ -9,7 +9,10 @@ from app.models.transcription import (
     FinalTranscriptData,
     MeetingSummary,
     TranscriptSegment,
-    ActionItem
+    ActionItem,
+    CaseInformation,
+    HearingParties,
+    JudicialHearingReport
 )
 
 class SessionManager:
@@ -32,9 +35,11 @@ class SessionManager:
     def get_or_create(self, session_id: Optional[str] = None, language_mode: str = "auto") -> SessionState:
         sid = session_id or str(uuid.uuid4())
         if sid not in self._sessions:
+            default_case = CaseInformation()
+            default_parties = HearingParties()
             self._sessions[sid] = SessionState(
                 id=sid,
-                title="New Recording",
+                title=f"{default_case.case_number} · {default_case.court}",
                 status="idle",
                 language_mode=language_mode,
                 started_at=None,
@@ -42,6 +47,9 @@ class SessionManager:
                 live_transcript=[],
                 final_transcript=None,
                 summary=None,
+                case_info=default_case,
+                parties=default_parties,
+                hearing_report=None,
                 speaker_names={},
                 has_audio=False,
                 audio_url=None
@@ -177,5 +185,34 @@ class SessionManager:
         if session:
             session.status = "error"
             session.error_message = error_message
+
+    def update_case_info(
+        self,
+        session_id: str,
+        case_info: Optional[CaseInformation] = None,
+        parties: Optional[HearingParties] = None
+    ) -> Optional[SessionState]:
+        session = self.get(session_id)
+        if not session:
+            return None
+        if case_info is not None:
+            session.case_info = case_info
+            if case_info.case_number:
+                session.title = f"{case_info.case_number} · {case_info.court}"
+        if parties is not None:
+            session.parties = parties
+        return session
+
+    def set_hearing_report(self, session_id: str, report: JudicialHearingReport) -> Optional[SessionState]:
+        session = self.get(session_id)
+        if not session:
+            return None
+        session.hearing_report = report
+        if report.case:
+            session.case_info = report.case
+            session.title = f"{report.case.case_number} · {report.case.court}"
+        if report.parties:
+            session.parties = report.parties
+        return session
 
 session_manager = SessionManager()

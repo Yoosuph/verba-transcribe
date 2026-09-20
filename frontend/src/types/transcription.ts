@@ -55,6 +55,83 @@ export interface MeetingSummary {
   speaker_contributions: SpeakerContribution[];
 }
 
+export interface CaseInformation {
+  case_number: string;
+  court: string;
+  judge: string;
+  hearing_date: string;
+  hearing_type: string;
+  duration?: string;
+  hearing_no?: string;
+}
+
+export interface HearingParties {
+  claimant: string;
+  counsel_claimant: string;
+  defendant: string;
+  counsel_defendant: string;
+  witnesses: string[];
+}
+
+export interface ProceedingNarrativeItem {
+  stage: string;
+  timestamp: string;
+  speaker: string;
+  text: string;
+}
+
+export interface LegalIssue {
+  issue: string;
+  source_time?: string;
+}
+
+export interface PartySubmissions {
+  claimant: string[];
+  defendant: string[];
+}
+
+export interface WitnessEvidence {
+  witness: string;
+  summary: string;
+  key_statements: string[];
+  cross_examination?: string;
+  timestamp?: string;
+}
+
+export interface ExhibitItem {
+  number: string;
+  description: string;
+  party: string;
+  timestamp?: string;
+}
+
+export interface CourtOrder {
+  order: string;
+  source_time?: string;
+}
+
+export interface AdjournmentInfo {
+  date: string;
+  time: string;
+  purpose: string;
+}
+
+export interface JudicialHearingReport {
+  case: CaseInformation;
+  parties: HearingParties;
+  summary: string;
+  proceedings: ProceedingNarrativeItem[];
+  issues: LegalIssue[];
+  submissions: PartySubmissions;
+  witness_evidence: WitnessEvidence[];
+  exhibits: ExhibitItem[];
+  court_observations: string[];
+  orders: CourtOrder[];
+  action_items: ActionItem[];
+  next_hearing: AdjournmentInfo;
+  appendix_transcript?: FinalTranscriptData;
+}
+
 export interface SessionData {
   id: string;
   title?: string;
@@ -68,6 +145,9 @@ export interface SessionData {
   live_transcript: LiveTranscriptItem[];
   final_transcript?: FinalTranscriptData;
   summary?: MeetingSummary;
+  case_info?: CaseInformation;
+  parties?: HearingParties;
+  hearing_report?: JudicialHearingReport;
   speaker_names: Record<string, string>;
   has_audio?: boolean;
   audio_url?: string;
