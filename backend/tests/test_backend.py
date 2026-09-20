@@ -110,6 +110,26 @@ def test_session_lifecycle():
     assert export_json.status_code == 200
     assert export_json.json()["id"] == session_id
 
+    # 7. Audio endpoint test
+    import os
+    from app.config import settings
+    os.makedirs(settings.temp_audio_dir, exist_ok=True)
+    audio_path = os.path.join(settings.temp_audio_dir, f"{session_id}.wav")
+    dummy_wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + (16).to_bytes(4, "little") + b"\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+    with open(audio_path, "wb") as f:
+        f.write(dummy_wav)
+
+    audio_resp = client.get(f"/api/sessions/{session_id}/audio")
+    assert audio_resp.status_code == 200
+    assert "audio/wav" in audio_resp.headers.get("content-type", "")
+
+    session_with_audio = client.get(f"/api/sessions/{session_id}").json()
+    assert session_with_audio["has_audio"] is True
+    assert session_with_audio["audio_url"] == f"/api/sessions/{session_id}/audio"
+
+    if os.path.exists(audio_path):
+        os.remove(audio_path)
+
 def test_audio_accumulator():
     accumulator = AudioAccumulator("test_session_123")
     # 1 second of 16kHz 16-bit mono = 16000 * 2 = 32000 bytes

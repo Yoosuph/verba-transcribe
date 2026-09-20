@@ -1,6 +1,8 @@
+import os
 import time
 import uuid
 from typing import Dict, Optional, List
+from app.config import settings
 from app.models.transcription import (
     SessionState,
     LiveTranscriptItem,
@@ -15,8 +17,16 @@ class SessionManager:
     def __init__(self):
         self._sessions: Dict[str, SessionState] = {}
 
+    def _enrich_session(self, session: SessionState) -> SessionState:
+        if session:
+            audio_path = os.path.join(settings.temp_audio_dir, f"{session.id}.wav")
+            if os.path.exists(audio_path) and os.path.getsize(audio_path) >= 44:
+                session.has_audio = True
+                session.audio_url = f"/api/sessions/{session.id}/audio"
+        return session
+
     def list_all(self) -> List[SessionState]:
-        return list(self._sessions.values())
+        return [self._enrich_session(s) for s in self._sessions.values()]
 
 
     def get_or_create(self, session_id: Optional[str] = None, language_mode: str = "auto") -> SessionState:
@@ -32,12 +42,15 @@ class SessionManager:
                 live_transcript=[],
                 final_transcript=None,
                 summary=None,
-                speaker_names={}
+                speaker_names={},
+                has_audio=False,
+                audio_url=None
             )
-        return self._sessions[sid]
+        return self._enrich_session(self._sessions[sid])
 
     def get(self, session_id: str) -> Optional[SessionState]:
-        return self._sessions.get(session_id)
+        session = self._sessions.get(session_id)
+        return self._enrich_session(session) if session else None
 
 
     def start_recording(self, session_id: str, language_mode: str = "auto") -> SessionState:

@@ -1,6 +1,8 @@
 import io
+import os
+import aiofiles
 from fastapi import APIRouter, HTTPException, UploadFile, File, Query
-from fastapi.responses import Response, PlainTextResponse
+from fastapi.responses import Response, PlainTextResponse, FileResponse
 from typing import List
 from app.models.transcription import (
     SessionState,
@@ -55,6 +57,26 @@ async def toggle_action_item(session_id: str, action_id: str, request: UpdateAct
         raise HTTPException(status_code=404, detail="Action item or session not found")
     return updated_item
 
+@router.get("/{session_id}/audio")
+async def get_session_audio(session_id: str):
+    """
+    Streams the recorded or uploaded audio for playback and replay.
+    Supports HTTP range requests for seamless timeline seeking in browser.
+    """
+    audio_path = os.path.join(settings.temp_audio_dir, f"{session_id}.wav")
+    if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+        raise HTTPException(status_code=404, detail="Audio recording not available for this session")
+
+    return FileResponse(
+        path=audio_path,
+        media_type="audio/wav",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=86400",
+            "Content-Disposition": f'inline; filename="meeting_{session_id}.wav"'
+        }
+    )
+
 @router.post("/{session_id}/complete-audio", response_model=SessionState)
 async def process_complete_audio(
     session_id: str,
@@ -68,6 +90,15 @@ async def process_complete_audio(
     session_manager.set_processing(session_id)
 
     audio_bytes = await audio_file.read()
+
+    # Save audio for playback
+    os.makedirs(settings.temp_audio_dir, exist_ok=True)
+    audio_path = os.path.join(settings.temp_audio_dir, f"{session_id}.wav")
+    try:
+        async with aiofiles.open(audio_path, "wb") as f:
+            await f.write(audio_bytes)
+    except Exception as e:
+        pass
 
     try:
         live_transcript_text = session_manager.get_live_transcript_text(session_id)

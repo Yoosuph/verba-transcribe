@@ -106,6 +106,14 @@ async def websocket_transcription_endpoint(websocket: WebSocket, session_id: str
                             await live_transcriber.stop()
                             live_transcriber = None
 
+                        # Save audio permanently for playback and replay
+                        if audio_accumulator.total_bytes > 0:
+                            try:
+                                await audio_accumulator.save_recording()
+                                logger.info(f"[{session_id}] Audio successfully saved for replay.")
+                            except Exception as e:
+                                logger.error(f"[{session_id}] Failed to save audio for replay: {e}")
+
                         # Stage 1: Final transcription & Diarization
                         await safe_send({
                             "type": "processing",

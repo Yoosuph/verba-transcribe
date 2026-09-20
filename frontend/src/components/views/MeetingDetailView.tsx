@@ -28,9 +28,12 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
   initialTab = 'summary',
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'actions'>(initialTab);
+  const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [audioDuration, setAudioDuration] = useState<number>(session.duration_seconds || 0);
+  const [hasAudioError, setHasAudioError] = useState(false);
   const [activeSpeakerFilter, setActiveSpeakerFilter] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
 
@@ -64,20 +67,82 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
     );
   };
 
-  const totalDuration = Math.max(10, Math.round(session.duration_seconds || 60));
+  const totalDuration = Math.max(1, Math.round(audioDuration || session.duration_seconds || 60));
 
-  // Audio Playback simulation / ticker
+  // Sync playback speed with audio element
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
+  // Pause audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play()
+        .then(() => {
+          setIsPlayingAudio(true);
+          setHasAudioError(false);
+        })
+        .catch((err) => {
+          console.warn("Real audio playback unavailable, falling back to preview ticker:", err);
+          setIsPlayingAudio(true);
+        });
+    }
+  };
+
+  const seekToTime = (secs: number) => {
+    const clamped = Math.max(0, Math.min(totalDuration, secs));
+    setPlaybackSeconds(clamped);
+    if (audioRef.current) {
+      audioRef.current.currentTime = clamped;
+      if (!isPlayingAudio) {
+        audioRef.current.play()
+          .then(() => {
+            setIsPlayingAudio(true);
+            setHasAudioError(false);
+          })
+          .catch(() => {});
+      }
+    }
+  };
+
+  const handleSpeedChange = () => {
+    const speeds = [1, 1.25, 1.5, 2];
+    const next = speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
+    setPlaybackSpeed(next);
+  };
+
+  // Fallback ticker if audio file is missing or in mock mode
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (isPlayingAudio) {
+    if (isPlayingAudio && (!audioRef.current || hasAudioError)) {
       interval = setInterval(() => {
-        setPlaybackSeconds((prev) => (prev >= totalDuration ? 0 : prev + 1));
+        setPlaybackSeconds((prev) => {
+          if (prev >= totalDuration) {
+            setIsPlayingAudio(false);
+            return 0;
+          }
+          return prev + 1;
+        });
       }, 1000 / playbackSpeed);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isPlayingAudio, playbackSpeed, totalDuration]);
+  }, [isPlayingAudio, hasAudioError, playbackSpeed, totalDuration]);
 
   const formatPlaybackTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -178,24 +243,52 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
         </h1>
 
         <div className="flex items-center justify-between mt-1">
-          <span className="text-xs font-medium text-slate-500">
-            {session.started_at || 'Today'} · {formatPlaybackTime(totalDuration)}
+          <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+            <span>{session.started_at || 'Today'}</span>
+            <span>·</span>
+            <span className="font-mono">{formatPlaybackTime(totalDuration)}</span>
           </span>
-          {detectedSpeakers.length > 0 && (
-            <div className="flex items-center">
-              {detectedSpeakers.slice(0, 4).map((sp, idx) => (
-                <div
-                  key={idx}
-                  title={sp}
-                  className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white ${
-                    speakerColors[idx % speakerColors.length].bg
-                  } ${idx > 0 ? '-ml-1.5' : ''}`}
-                >
-                  {sp ? sp[0].toUpperCase() : 'S'}
-                </div>
-              ))}
-            </div>
-          )}
+
+          <div className="flex items-center gap-2">
+            {/* Quick Replay Pill */}
+            <button
+              onClick={togglePlay}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all active:scale-95 shadow-xs cursor-pointer ${
+                isPlayingAudio
+                  ? 'bg-[#2F45EE] text-white shadow-indigo-500/20'
+                  : 'bg-white border border-slate-200/80 text-[#2F45EE] hover:bg-slate-50'
+              }`}
+              title={isPlayingAudio ? 'Pause meeting audio' : 'Replay meeting audio'}
+            >
+              {isPlayingAudio ? (
+                <>
+                  <Pause className="w-3 h-3 fill-white" />
+                  <span>Pause</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3 h-3 fill-current ml-0.5" />
+                  <span>Replay</span>
+                </>
+              )}
+            </button>
+
+            {detectedSpeakers.length > 0 && (
+              <div className="flex items-center">
+                {detectedSpeakers.slice(0, 4).map((sp, idx) => (
+                  <div
+                    key={idx}
+                    title={sp}
+                    className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white ${
+                      speakerColors[idx % speakerColors.length].bg
+                    } ${idx > 0 ? '-ml-1.5' : ''}`}
+                  >
+                    {sp ? sp[0].toUpperCase() : 'S'}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -387,8 +480,8 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
             <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-[0_2px_10px_rgba(0,0,0,0.03)] space-y-3">
               <div className="flex items-center gap-3.5">
                 <button
-                  onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                  className="w-12 h-12 rounded-full bg-[#2F45EE] hover:bg-[#2537D8] text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-500/20 active:scale-95 transition-all"
+                  onClick={togglePlay}
+                  className="w-12 h-12 rounded-full bg-[#2F45EE] hover:bg-[#2537D8] text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-indigo-500/20 active:scale-95 transition-all cursor-pointer"
                   title={isPlayingAudio ? 'Pause Audio' : 'Play Audio'}
                 >
                   {isPlayingAudio ? (
@@ -398,19 +491,27 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                   )}
                 </button>
 
-                {/* Multi-Color Audio Waveform Spectrum */}
-                <div className="flex-1 flex items-center justify-between gap-[2px] h-9 px-1">
+                {/* Multi-Color Audio Waveform Spectrum with Seeking */}
+                <div
+                  className="flex-1 flex items-center justify-between gap-[2px] h-9 px-1 cursor-pointer py-1 group select-none"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    seekToTime(clickRatio * totalDuration);
+                  }}
+                  title="Click to scrub / seek audio"
+                >
                   {waveformColors.map((color, idx) => {
-                    const heightPercent = 25 + Math.sin(idx * 0.7 + (isPlayingAudio ? Date.now() / 150 : 0)) * 55;
+                    const heightPercent = 25 + Math.sin(idx * 0.7 + (isPlayingAudio ? (playbackSeconds * 5) : 0)) * 55;
                     const isActive = idx < ((playbackSeconds / totalDuration) * waveformColors.length);
 
                     return (
                       <div
                         key={idx}
-                        className="w-[3px] rounded-full transition-all duration-150"
+                        className="w-[3px] rounded-full transition-all duration-100 group-hover:scale-y-110"
                         style={{
                           height: `${Math.max(15, Math.min(95, heightPercent))}%`,
-                          backgroundColor: isActive ? color : `${color}50`,
+                          backgroundColor: isActive ? color : `${color}40`,
                         }}
                       />
                     );
@@ -420,14 +521,13 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
 
               {/* Time Indicators + Speed Pill */}
               <div className="flex items-center justify-between text-xs text-slate-400 font-mono pt-1">
-                <span>{formatPlaybackTime(playbackSeconds)}</span>
+                <span className={isPlayingAudio ? 'text-[#2F45EE] font-semibold' : ''}>
+                  {formatPlaybackTime(playbackSeconds)}
+                </span>
                 <button
-                  onClick={() => {
-                    const speeds = [1, 1.25, 1.5, 2];
-                    const next = speeds[(speeds.indexOf(playbackSpeed) + 1) % speeds.length];
-                    setPlaybackSpeed(next);
-                  }}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-0.5 rounded-md text-[11px] font-sans active:scale-95 transition-all"
+                  onClick={handleSpeedChange}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-0.5 rounded-md text-[11px] font-sans active:scale-95 transition-all cursor-pointer"
+                  title="Playback Speed"
                 >
                   {playbackSpeed}×
                 </button>
@@ -485,11 +585,16 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                 filteredSegments.map((seg) => {
                   const style = getSpeakerStyle(seg.speaker);
                   const initial = seg.speaker ? seg.speaker[0].toUpperCase() : 'S';
+                  const isActiveSegment = isPlayingAudio && playbackSeconds >= seg.start && playbackSeconds <= (seg.end || seg.start + 3);
 
                   return (
                     <div
                       key={seg.id}
-                      className="bg-white rounded-2xl p-3.5 border border-slate-100/90 shadow-xs flex items-start gap-3 hover:border-indigo-100 transition-all"
+                      className={`rounded-2xl p-3.5 border transition-all flex items-start gap-3 ${
+                        isActiveSegment
+                          ? 'bg-indigo-50/40 border-[#2F45EE]/40 shadow-sm ring-1 ring-[#2F45EE]/20'
+                          : 'bg-white border-slate-100/90 shadow-xs hover:border-indigo-100'
+                      }`}
                     >
                       <div
                         className={`w-8 h-8 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5 ${style.bg}`}
@@ -501,9 +606,14 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
                           <span className={`text-sm font-bold ${style.text}`}>
                             {seg.speaker}
                           </span>
-                          <span className="text-xs text-slate-400 font-mono">
-                            {formatPlaybackTime(seg.start)}
-                          </span>
+                          <button
+                            onClick={() => seekToTime(seg.start)}
+                            className="text-xs text-slate-400 hover:text-[#2F45EE] font-mono cursor-pointer flex items-center gap-1 transition-colors"
+                            title={`Jump audio to ${formatPlaybackTime(seg.start)}`}
+                          >
+                            <Play className="w-2.5 h-2.5 fill-current opacity-70" />
+                            <span>{formatPlaybackTime(seg.start)}</span>
+                          </button>
                         </div>
                         <p className="text-sm text-slate-800 leading-relaxed font-normal">
                           {seg.text}
@@ -578,6 +688,29 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Hidden real audio element for meeting replay */}
+      <audio
+        ref={audioRef}
+        src={session.audio_url || `/api/sessions/${session.id}/audio`}
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          const dur = e.currentTarget.duration;
+          if (dur && !isNaN(dur) && isFinite(dur) && dur > 0) {
+            setAudioDuration(dur);
+          }
+        }}
+        onTimeUpdate={(e) => {
+          setPlaybackSeconds(e.currentTarget.currentTime);
+        }}
+        onEnded={() => {
+          setIsPlayingAudio(false);
+          setPlaybackSeconds(0);
+        }}
+        onError={() => {
+          setHasAudioError(true);
+        }}
+      />
     </div>
   );
 };

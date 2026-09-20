@@ -45,21 +45,19 @@ class AudioAccumulator:
             wav_file.writeframes(bytes(self._pcm_buffer))
         return wav_io.getvalue()
 
-    async def save_to_file(self) -> str:
-        """Saves accumulated audio as a WAV file on disk for Gemini processing."""
-        filename = f"{self.session_id}_{uuid.uuid4().hex[:8]}.wav"
+    async def save_recording(self) -> str:
+        """Saves accumulated audio as a persistent WAV file for playback and replay."""
+        filename = f"{self.session_id}.wav"
         self.file_path = os.path.join(settings.temp_audio_dir, filename)
         wav_bytes = self.get_wav_bytes()
         async with aiofiles.open(self.file_path, "wb") as f:
             await f.write(wav_bytes)
         return self.file_path
 
+    async def save_to_file(self) -> str:
+        """Legacy helper, maps to save_recording."""
+        return await self.save_recording()
+
     async def cleanup(self) -> None:
-        """Safely removes temporary WAV file from disk."""
-        if self.file_path and os.path.exists(self.file_path):
-            try:
-                os.remove(self.file_path)
-            except OSError:
-                pass
-            self.file_path = None
+        """Frees in-memory buffer while retaining saved audio on disk for replay."""
         self._pcm_buffer.clear()

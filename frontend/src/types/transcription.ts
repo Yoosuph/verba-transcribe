@@ -69,6 +69,8 @@ export interface SessionData {
   final_transcript?: FinalTranscriptData;
   summary?: MeetingSummary;
   speaker_names: Record<string, string>;
+  has_audio?: boolean;
+  audio_url?: string;
   error_message?: string;
 }
 

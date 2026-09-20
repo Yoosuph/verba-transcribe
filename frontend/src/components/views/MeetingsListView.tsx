@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Mic, Clock } from 'lucide-react';
+import { Search, Mic, Clock, Volume2 } from 'lucide-react';
 import type { SessionState } from '../../types/transcription';
 
 interface MeetingsListViewProps {
@@ -216,6 +216,12 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                         <Clock className="w-3 h-3" />
                         <span>{durationMin} min</span>
                       </span>
+                      {session.has_audio && (
+                        <span className="flex items-center gap-1 text-[11px] text-[#2F45EE] bg-[#EEF2FF] px-2 py-0.5 rounded-full font-medium" title="Audio recording available for replay">
+                          <Volume2 className="w-3 h-3" />
+                          <span>Replay</span>
+                        </span>
+                      )}
                     </div>
 
                     {actionCount > 0 && (

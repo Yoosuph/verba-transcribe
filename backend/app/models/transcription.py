@@ -58,6 +58,8 @@ class SessionState(BaseModel):
     final_transcript: Optional[FinalTranscriptData] = None
     summary: Optional[MeetingSummary] = None
     speaker_names: Dict[str, str] = Field(default_factory=dict)
+    has_audio: bool = False
+    audio_url: Optional[str] = None
     error_message: Optional[str] = None
 
 class RenameSpeakerRequest(BaseModel):
