@@ -5,7 +5,6 @@ import {
   Bookmark,
   Pause,
   Play,
-  CheckCircle2,
   Loader2,
 } from 'lucide-react';
 import { JudiciaryLogo } from '../common/JudiciaryLogo';
@@ -153,148 +152,81 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
 
   // ================= 1. DEDICATED PROCESSING & COMPLETION SCREEN =================
   if (showProcessingScreen) {
-    return (
-      <div className="flex-1 flex flex-col bg-gradient-to-b from-[#005A34] via-[#044428] to-[#022C22] text-white p-6 justify-between select-none relative overflow-hidden">
-        {/* Subtle Background Glows */}
-        <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-400/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-black/40 rounded-full blur-3xl pointer-events-none" />
+    const stageMessage =
+      processingStage === 'summarization'
+        ? 'Synthesizing overview and rulings...'
+        : processingStage === 'speaker_diarization'
+        ? 'Diarizing testimony & speakers...'
+        : 'Transcribing court audio...';
 
-        {/* Top Header Status Indicators */}
-        <div className="flex items-center justify-between pt-2 flex-shrink-0 relative z-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/35 text-emerald-200 text-xs font-semibold shadow-xs">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-            <span>Recording Stopped</span>
+    return (
+      <div className="flex-1 flex flex-col bg-[#F8FAF9] text-slate-900 justify-between p-6 select-none relative overflow-hidden">
+        {/* Subtle Top Status */}
+        <div className="flex items-center justify-between pt-2 flex-shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-medium">
+            <Loader2 className="w-3 h-3 text-[#008751] animate-spin" />
+            <span>Recording saved</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-white/90 bg-white/15 px-3 py-1 rounded-full border border-white/10">
-              {formatTime(recordingSeconds)}
-            </span>
-            {totalWords > 0 && (
-              <span className="text-xs text-white/80 bg-white/10 px-2.5 py-1 rounded-full border border-white/10">
-                {totalWords} words
-              </span>
-            )}
+          <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+            <span>{formatTime(recordingSeconds)}</span>
+            {totalWords > 0 && <span>· {totalWords} words</span>}
           </div>
         </div>
 
-        {/* Center Progress Card */}
-        <div className="my-auto space-y-6 relative z-10">
-          {/* Animated Glowing Beacon */}
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-white/15 border border-white/30 flex items-center justify-center shadow-2xl backdrop-blur-md">
-                <Loader2 className="w-9 h-9 text-white animate-spin" />
-              </div>
-              <div className="absolute inset-0 rounded-full bg-white/20 animate-ping pointer-events-none" />
+        {/* Minimal Centered Card */}
+        <div className="my-auto flex flex-col items-center text-center max-w-sm mx-auto space-y-5">
+          {/* Minimal Crest Tile */}
+          <div className="relative flex items-center justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex items-center justify-center">
+              <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
             </div>
+            <div className="absolute -inset-2 rounded-3xl border border-emerald-500/20 animate-pulse pointer-events-none" />
+          </div>
 
-            <div className="space-y-1">
-              <h2 className="text-2xl font-black tracking-tight text-white">
-                Finalizing Meeting
-              </h2>
-              <p className="text-xs text-white/80 max-w-xs mx-auto leading-relaxed">
-                Transcribing audio, identifying distinct speakers, and synthesizing your grounded executive summary.
-              </p>
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+              Finalizing Proceeding
+            </h2>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+              {stageMessage}
+            </p>
+          </div>
+
+          {/* Hairline Minimal Progress Bar */}
+          <div className="w-48 space-y-1.5 pt-1">
+            <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#008751] rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium">
+              <span>Processing</span>
+              <span className="font-mono">{progressPercent}%</span>
             </div>
           </div>
 
-          {/* Stepper Card */}
-          <div className="bg-white/15 backdrop-blur-md rounded-2xl p-5 border border-white/20 shadow-xl space-y-4">
-            {/* Progress Bar */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-medium text-white/90">
-                <span>Pipeline Status</span>
-                <span className="font-mono font-bold">{progressPercent}%</span>
-              </div>
-              <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-white rounded-full transition-all duration-700 ease-out shadow-sm"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Steps Checklist */}
-            <div className="space-y-3 pt-1 text-xs">
-              {/* Step 1: Audio Finalized */}
-              <div className="flex items-center gap-3 text-white/95">
-                <div className="w-5 h-5 rounded-full bg-emerald-400 text-slate-900 flex items-center justify-center flex-shrink-0 font-bold text-[11px] shadow-xs">
-                  ✓
-                </div>
-                <div className="flex-1">
-                  <span className="font-semibold block text-white">Audio Stream Finalized</span>
-                  <span className="text-[11px] text-white/70">
-                    Microphone released · 16kHz audio captured ({formatTime(recordingSeconds)})
-                  </span>
-                </div>
-              </div>
-
-              {/* Step 2: Speaker Diarization */}
-              <div className="flex items-center gap-3 text-white/95">
-                {processingStage === 'summarization' ? (
-                  <div className="w-5 h-5 rounded-full bg-emerald-400 text-slate-900 flex items-center justify-center flex-shrink-0 font-bold text-[11px] shadow-xs">
-                    ✓
-                  </div>
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <Loader2 className="w-3 h-3 text-white animate-spin" />
-                  </div>
-                )}
-                <div className="flex-1">
-                  <span className="font-semibold block text-white">Speaker Diarization & Timestamps</span>
-                  <span className="text-[11px] text-white/70">
-                    {processingStage === 'summarization'
-                      ? 'Speakers aligned and labeled'
-                      : 'Segmenting dialogue & detecting language'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Step 3: Meeting Notes & Actions */}
-              <div className="flex items-center gap-3 text-white/95">
-                {processingStage === 'summarization' ? (
-                  <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <Loader2 className="w-3 h-3 text-white animate-spin" />
-                  </div>
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-white/50 text-[11px] font-semibold">
-                    3
-                  </div>
-                )}
-                <div className="flex-1">
-                  <span className="font-semibold block text-white">Grounded Summary & Decisions</span>
-                  <span className="text-[11px] text-white/70">
-                    {processingStage === 'summarization'
-                      ? 'Synthesizing overview, decisions, and action items...'
-                      : 'Awaiting diarized transcript'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Error message banner if any */}
+          {/* Error Message if Any */}
           {errorMessage && (
-            <div className="bg-red-500/20 border border-red-400/40 rounded-xl p-3 text-xs text-red-100 flex items-start gap-2">
-              <span className="font-bold">Notice:</span>
-              <span className="flex-1">{errorMessage}</span>
+            <div className="bg-rose-50 border border-rose-200/80 rounded-xl p-3 text-xs text-rose-700 text-left">
+              <span className="font-semibold">Notice:</span> {errorMessage}
             </div>
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="pt-2 pb-2 flex-shrink-0 flex flex-col items-center gap-2 relative z-10">
+        {/* Minimal Quiet Footer */}
+        <div className="pt-2 pb-2 flex-shrink-0 flex flex-col items-center gap-2">
           {onViewTranscript && (
             <button
               onClick={onViewTranscript}
-              className="text-xs text-white/80 hover:text-white underline underline-offset-2 py-1 px-3 rounded-lg hover:bg-white/10 transition-colors"
+              className="text-xs text-slate-500 hover:text-slate-800 transition-colors font-medium hover:underline underline-offset-4 cursor-pointer"
             >
-              View Live Transcript Now
+              View Live Transcript
             </button>
           )}
-          <span className="text-[11px] text-white/60 text-center">
-            Audio preserved · You will automatically be redirected to the summary once ready.
+          <span className="text-[11px] text-slate-400">
+            Proceeding will open automatically once finalized
           </span>
         </div>
       </div>
@@ -328,7 +260,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
               }`}
             />
             <span className="text-[11px] font-medium text-emerald-200">
-              {isPaused ? 'Court Session Paused' : 'Live Court Recording'}
+              {isPaused ? 'Paused' : 'Recording'}
             </span>
           </div>
         </div>

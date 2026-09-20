@@ -188,36 +188,25 @@ export const MainLayout: React.FC = () => {
   }, [sessions]);
 
   // Determine theme for current page
-  const pageTheme = activePage === 'live' ? 'royal' : 'light';
+  const pageTheme = activePage === 'live' && status === 'recording' ? 'royal' : 'light';
   const effectiveSession = selectedSession || (sessions.length > 0 ? sessions[0] : null);
 
   return (
     <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden relative selection:bg-[#008751]/30 font-sans">
-      {/* Official Nigerian National Flag Tricolor Accent Ribbon */}
+      {/* Subtle Nigerian National Flag Tricolor Accent Ribbon */}
       <div className="w-full h-1 nigerian-tricolor flex-shrink-0 z-50" />
-
-      {/* Official Nigerian Judiciary Top Header Bar */}
-      <header className="w-full bg-[#043320] text-white border-b border-emerald-900/60 px-4 sm:px-8 py-2.5 flex items-center justify-between z-40 shadow-sm flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <JudiciaryLogo size="sm" variant="full" showText={true} lightMode={false} />
-        </div>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1.5 sm:gap-2 px-3 py-1 rounded-full bg-emerald-950/70 border border-emerald-500/25 text-[11px] sm:text-xs text-emerald-200">
-            <span className={`w-2 h-2 rounded-full ${status === 'recording' ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`} />
-            <span className="font-semibold tracking-wide uppercase text-[10px] sm:text-[11px]">
-              {status === 'recording' ? 'Court Session Live' : 'Electronic Court Record'}
-            </span>
-          </div>
-
-          <span className="text-[10px] font-bold text-emerald-300/80 uppercase tracking-widest hidden md:inline border-l border-emerald-700/50 pl-3">
-            Federal Republic of Nigeria
-          </span>
-        </div>
-      </header>
 
       {/* Main Responsive App Body: Fills the rest of the browser window smoothly */}
       <main className="flex-1 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
+        {/* Floating Minimal Header: centered emblem, no text, no live session badge */}
+        {activePage !== 'live' && (
+          <div className="absolute top-3 left-0 right-0 flex justify-center z-40 pointer-events-none">
+            <header className="pointer-events-auto inline-flex items-center justify-center p-1 px-2.5 rounded-full bg-white/85 hover:bg-white backdrop-blur-md border border-slate-200/80 shadow-[0_2px_10px_rgba(0,0,0,0.04)] hover:shadow-md transition-all active:scale-95 cursor-default" title="Judicial Emblem">
+              <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+            </header>
+          </div>
+        )}
+
         {/* Main Mobile/Desktop App Container */}
         <PhoneFrame theme={pageTheme}>
           {/* Content Body Area with fluid directional motion */}

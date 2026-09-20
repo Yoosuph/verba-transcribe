@@ -200,7 +200,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
   return (
     <div className="flex-1 flex flex-col bg-[#F8FAFC] text-slate-900 overflow-hidden relative select-none">
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between px-5 pt-3 pb-2 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 pt-12 pb-2 flex-shrink-0">
         <button
           onClick={onBack}
           className="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700"
