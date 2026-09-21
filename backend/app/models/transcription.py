@@ -61,7 +61,7 @@ class HearingParties(BaseModel):
     counsel_claimant: str = Field(default="Barr. Ibrahim Gambo Dutse", description="Counsel or Wakil for Appellant")
     defendant: str = Field(default="Malam Mustapha Suleiman (Wanda Ake Daukaka Kara / Respondent)", description="Respondent / Defendant / Wanda Ake Kara")
     counsel_defendant: str = Field(default="Barr. Aisha Mohammed Hadejia", description="Counsel or Wakil for Respondent")
-    witnesses: List[str] = Field(default_factory=lambda: ["PW1 — Malam Sani Ringim", "DW1 — Aliyu Adamu Gumel"], description="Witnesses called")
+    witnesses: List[str] = Field(default_factory=list, description="Witnesses called")
 
 class ProceedingNarrativeItem(BaseModel):
     stage: str = Field(..., description="Stage title, e.g. Call of Appeal, Submissions by Appellant, Inquiries by the Bench, Orders")

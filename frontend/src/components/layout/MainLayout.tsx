@@ -46,7 +46,7 @@ const DEFAULT_PARTIES: HearingParties = {
   counsel_claimant: 'Barr. Ibrahim Gambo Dutse',
   defendant: 'Malam Mustapha Suleiman (Wanda Ake Daukaka Kara / Respondent)',
   counsel_defendant: 'Barr. Aisha Mohammed Hadejia',
-  witnesses: ['PW1 — Malam Sani Ringim', 'DW1 — Aliyu Adamu Gumel'],
+  witnesses: [],
 };
 
 export const MainLayout: React.FC = () => {
