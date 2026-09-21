@@ -39,71 +39,85 @@ class MeetingSummary(BaseModel):
     speaker_contributions: List[SpeakerContribution] = Field(default_factory=list, description="Summary of each speaker's contributions")
 
 class CaseInformation(BaseModel):
-    case_number: str = Field(default="FHC/KN/CS/1042/2026", description="Court suit or case number")
-    court: str = Field(default="Federal High Court, Kano", description="Court division and name")
-    judge: str = Field(default="Hon. Justice M. S. Abubakar", description="Presiding judge")
+    case_number: str = Field(default="JGS/SCA/DTS/CV/018/2026", description="Court appeal or suit number")
+    court: str = Field(default="Sharia Court of Appeal, Jigawa State", description="Court division and name")
+    division: str = Field(default="Dutse Judicial Division", description="Judicial division")
+    judge: str = Field(default="Hon. Kadi Sani Salihu (Hon. Grand Kadi)", description="Presiding Grand Kadi / Judge")
+    coram: List[str] = Field(
+        default_factory=lambda: [
+            "Hon. Kadi Sani Salihu (Hon. Grand Kadi / Presiding)",
+            "Hon. Kadi Abubakar M. Gumel (Hon. Kadi)",
+            "Hon. Kadi Usman Birnin Kudu (Hon. Kadi)"
+        ],
+        description="Panel of Kadis"
+    )
     hearing_date: str = Field(default="21 September 2026", description="Date of hearing")
-    hearing_type: str = Field(default="Motion Hearing", description="Type of hearing, e.g. Motion Hearing, Trial, Ruling")
+    hearing_type: str = Field(default="Civil Appeal (Islamic Personal Law / Mirath)", description="Type of hearing, e.g. Civil Appeal, Inheritance, Matrimonial, Trial")
     duration: str = Field(default="00:00:00", description="Duration of hearing session")
-    hearing_no: str = Field(default="4", description="Hearing number in series")
+    hearing_no: str = Field(default="2", description="Hearing number in series")
 
 class HearingParties(BaseModel):
-    claimant: str = Field(default="ABC Limited", description="Claimant / Applicant")
-    counsel_claimant: str = Field(default="Barr. Ibrahim Gambo", description="Counsel representing Claimant")
-    defendant: str = Field(default="XYZ Limited", description="Defendant / Respondent")
-    counsel_defendant: str = Field(default="Barr. Aisha Bello", description="Counsel representing Defendant")
-    witnesses: List[str] = Field(default_factory=lambda: ["PW1 — Aliyu Mohammed", "DW1 — Zainab Garba"], description="Witnesses called")
+    claimant: str = Field(default="Alhaji Haruna Garba & Ors (Mai Daukaka Kara / Appellant)", description="Appellant / Claimant / Mai Kara")
+    counsel_claimant: str = Field(default="Barr. Ibrahim Gambo Dutse", description="Counsel or Wakil for Appellant")
+    defendant: str = Field(default="Malam Mustapha Suleiman (Wanda Ake Daukaka Kara / Respondent)", description="Respondent / Defendant / Wanda Ake Kara")
+    counsel_defendant: str = Field(default="Barr. Aisha Mohammed Hadejia", description="Counsel or Wakil for Respondent")
+    witnesses: List[str] = Field(default_factory=lambda: ["PW1 — Malam Sani Ringim", "DW1 — Aliyu Adamu Gumel"], description="Witnesses called")
 
 class ProceedingNarrativeItem(BaseModel):
-    stage: str = Field(..., description="Stage title, e.g. Opening, Submissions by Claimant, Ruling")
-    timestamp: str = Field(..., description="Timestamp in proceedings, e.g. 09:42:17")
-    speaker: str = Field(..., description="Speaker identifier, e.g. COURT, CLAIMANT'S COUNSEL")
-    text: str = Field(..., description="Narrative description of what transpired")
+    stage: str = Field(..., description="Stage title, e.g. Call of Appeal, Submissions by Appellant, Inquiries by the Bench, Orders")
+    speaker: str = Field(..., description="Speaker or participant, e.g. THE BENCH / GRAND KADI, COUNSEL FOR APPELLANT")
+    text: str = Field(..., description="Narrative procedural explanation of what transpired")
+    timestamp: Optional[str] = Field(default=None, description="Optional timestamp reference")
 
 class LegalIssue(BaseModel):
-    issue: str = Field(..., description="Major legal or factual issue considered")
-    source_time: Optional[str] = Field(default=None, description="Transcript timestamp reference, e.g. 00:47:21")
+    issue: str = Field(..., description="Major legal or Sharia issue considered")
+    source_time: Optional[str] = Field(default=None, description="Optional transcript reference")
 
 class PartySubmissions(BaseModel):
-    claimant: List[str] = Field(default_factory=list, description="Submissions by Claimant / Applicant counsel")
-    defendant: List[str] = Field(default_factory=list, description="Submissions by Defendant / Respondent counsel")
+    claimant: List[str] = Field(default_factory=list, description="Submissions on behalf of Appellant / Claimant")
+    defendant: List[str] = Field(default_factory=list, description="Submissions on behalf of Respondent / Defendant")
 
 class WitnessEvidence(BaseModel):
-    witness: str = Field(..., description="Witness designation e.g. PW1, DW1")
-    summary: str = Field(..., description="Summary of witness evidence")
+    witness: str = Field(..., description="Witness designation e.g. PW1, DW1, Shaidar Bayyina")
+    summary: str = Field(..., description="Summary of witness evidence and sworn testimony")
     key_statements: List[str] = Field(default_factory=list, description="Key bullet statements")
     cross_examination: Optional[str] = Field(default=None, description="Cross-examination summary if any")
-    timestamp: Optional[str] = Field(default=None, description="Evidence timestamp in recording")
+    timestamp: Optional[str] = Field(default=None, description="Optional timestamp")
 
 class ExhibitItem(BaseModel):
-    number: str = Field(..., description="Exhibit number e.g. P1, P2, D1")
-    description: str = Field(..., description="Description of document or object tendered")
-    party: str = Field(default="Claimant", description="Tendering party (Claimant / Defendant)")
-    timestamp: Optional[str] = Field(default=None, description="Time referenced in proceeding")
+    number: str = Field(..., description="Exhibit designation e.g. Exhibit P1, D1, Takarda A")
+    description: str = Field(..., description="Description of document, record of proceedings, or object tendered")
+    party: str = Field(default="Appellant", description="Tendering party (Appellant / Respondent)")
+    timestamp: Optional[str] = Field(default=None, description="Optional timestamp")
 
 class CourtOrder(BaseModel):
-    order: str = Field(..., description="Court order or formal direction issued")
-    source_time: Optional[str] = Field(default=None, description="Transcript reference time e.g. 01:43:21")
+    order: str = Field(..., description="Formal judicial order, ruling, or directive issued (Hukunci)")
+    source_time: Optional[str] = Field(default=None, description="Optional reference")
 
 class AdjournmentInfo(BaseModel):
     date: str = Field(default="12 October 2026", description="Adjourned hearing date")
     time: str = Field(default="09:00 AM", description="Hearing time")
-    purpose: str = Field(default="Further hearing of the application.", description="Hearing purpose")
+    purpose: str = Field(default="Continuation of hearing and adoption of addresses.", description="Hearing purpose")
 
 class JudicialHearingReport(BaseModel):
     case: CaseInformation = Field(default_factory=CaseInformation)
     parties: HearingParties = Field(default_factory=HearingParties)
-    summary: str = Field(..., description="Executive summary of the hearing (3-6 paragraphs)")
-    proceedings: List[ProceedingNarrativeItem] = Field(default_factory=list, description="Chronological narrative of proceedings")
-    issues: List[LegalIssue] = Field(default_factory=list, description="Key issues considered with timestamp citations")
-    submissions: PartySubmissions = Field(default_factory=PartySubmissions, description="Arguments separated by claimant and defendant")
+    bismillah_header: str = Field(
+        default="بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ — IN THE NAME OF ALLAH, THE MOST BENEFICENT, THE MOST MERCIFUL",
+        description="Bismillah header invocation"
+    )
+    summary: str = Field(..., description="Executive summary of the hearing proceedings (3-6 paragraphs)")
+    proceedings: List[ProceedingNarrativeItem] = Field(default_factory=list, description="Chronological explanation of proceedings stages")
+    issues: List[LegalIssue] = Field(default_factory=list, description="Key legal and Sharia issues considered")
+    submissions: PartySubmissions = Field(default_factory=PartySubmissions, description="Submissions of Appellant and Respondent")
     witness_evidence: List[WitnessEvidence] = Field(default_factory=list, description="Witness testimony and cross-examination summaries")
-    exhibits: List[ExhibitItem] = Field(default_factory=list, description="Exhibits tendered or referenced")
-    court_observations: List[str] = Field(default_factory=list, description="Factual matters noted during proceedings")
-    orders: List[CourtOrder] = Field(default_factory=list, description="Formal court orders and directions with timestamp citations")
-    action_items: List[ActionItem] = Field(default_factory=list, description="Administrative tasks and compliance deadlines")
-    next_hearing: AdjournmentInfo = Field(default_factory=AdjournmentInfo, description="Adjournment and next hearing details")
-    appendix_transcript: Optional[FinalTranscriptData] = Field(default=None, description="Complete verbatim speaker-labelled transcript")
+    exhibits: List[ExhibitItem] = Field(default_factory=list, description="Exhibits and documentary records tendered")
+    islamic_authorities: List[str] = Field(default_factory=list, description="Islamic jurisprudence authorities and Fiqh citations")
+    court_observations: List[str] = Field(default_factory=list, description="Factual and legal matters observed by the Bench")
+    orders: List[CourtOrder] = Field(default_factory=list, description="Formal court orders and rulings pronounced (Hukunci)")
+    action_items: List[ActionItem] = Field(default_factory=list, description="Administrative directives and registry compliance deadlines")
+    next_hearing: AdjournmentInfo = Field(default_factory=AdjournmentInfo, description="Adjournment details (Ta'jil)")
+    appendix_transcript: Optional[FinalTranscriptData] = Field(default=None, description="Verbatim speaker-labelled transcript")
 
 class LiveTranscriptItem(BaseModel):
     id: str

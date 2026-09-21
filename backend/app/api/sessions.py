@@ -201,18 +201,19 @@ async def ask_about_meeting(session_id: str, request: AskRequest):
             summary_text += "Actions: " + "; ".join(f"{a.task} ({a.assignee})" for a in session.summary.action_items) + "\n"
 
     if not settings.gemini_api_key:
+        suit_no = session.case_info.case_number if session.case_info else session_id
         return AskResponse(
-            answer="Based on the transcript, the team reviewed the upcoming milestones, weekly payout policy, and vendor onboarding deadlines.",
+            answer=f"Based on the official proceedings record for {suit_no}, no additional information was recorded on this question.",
             evidence_segment_ids=[]
         )
 
     try:
         client = genai.Client(api_key=settings.gemini_api_key)
         prompt = (
-            f"You are a meeting assistant. Answer this question based STRICTLY on the meeting notes and transcript below.\n"
+            f"You are the Chief Court Stenographer for the Sharia Court of Appeal of Jigawa State. Answer this question based STRICTLY on the official proceedings and transcript below.\n"
             f"{summary_text}\nTranscript:\n{context}\n\n"
             f"Question: {request.question}\n"
-            f"Answer concisely in 1-2 clear sentences. If you cannot find the answer, state that it was not discussed."
+            f"Answer concisely in 1-2 clear sentences. If you cannot find the answer, state that it was not discussed during the proceedings."
         )
         resp = await client.aio.models.generate_content(
             model=settings.gemini_summary_model,

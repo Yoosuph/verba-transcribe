@@ -20,30 +20,36 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
   initialCaseInfo,
   initialParties,
 }) => {
-  const [caseNumber, setCaseNumber] = useState(initialCaseInfo?.case_number || 'FHC/KN/CS/1042/2026');
-  const [court, setCourt] = useState(initialCaseInfo?.court || 'Federal High Court, Kano');
-  const [judge, setJudge] = useState(initialCaseInfo?.judge || 'Hon. Justice M. S. Abubakar');
+  const [caseNumber, setCaseNumber] = useState(initialCaseInfo?.case_number || 'JGS/SCA/DTS/CV/018/2026');
+  const [court, setCourt] = useState(initialCaseInfo?.court || 'Sharia Court of Appeal, Jigawa State (Dutse Division)');
+  const [judge, setJudge] = useState(initialCaseInfo?.judge || 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)');
   const [hearingDate, setHearingDate] = useState(initialCaseInfo?.hearing_date || '21 September 2026');
-  const [hearingType, setHearingType] = useState(initialCaseInfo?.hearing_type || 'Motion Hearing');
-  const [hearingNo, setHearingNo] = useState(initialCaseInfo?.hearing_no || '4');
+  const [hearingType, setHearingType] = useState(initialCaseInfo?.hearing_type || 'Civil Appeal (Islamic Personal Law / Mirath)');
+  const [hearingNo, setHearingNo] = useState(initialCaseInfo?.hearing_no || '2');
 
-  const [claimant, setClaimant] = useState(initialParties?.claimant || 'ABC Limited');
-  const [counselClaimant, setCounselClaimant] = useState(initialParties?.counsel_claimant || 'Barr. Ibrahim Gambo');
-  const [defendant, setDefendant] = useState(initialParties?.defendant || 'XYZ Limited');
-  const [counselDefendant, setCounselDefendant] = useState(initialParties?.counsel_defendant || 'Barr. Aisha Bello');
+  const [claimant, setClaimant] = useState(initialParties?.claimant || 'Alhaji Haruna Garba & Ors (Mai Daukaka Kara / Appellant)');
+  const [counselClaimant, setCounselClaimant] = useState(initialParties?.counsel_claimant || 'Barr. Ibrahim Gambo Dutse');
+  const [defendant, setDefendant] = useState(initialParties?.defendant || 'Malam Mustapha Suleiman (Wanda Ake Daukaka Kara / Respondent)');
+  const [counselDefendant, setCounselDefendant] = useState(initialParties?.counsel_defendant || 'Barr. Aisha Mohammed Hadejia');
   const [witnessesText, setWitnessesText] = useState(
-    initialParties?.witnesses?.join(', ') || 'PW1 — Aliyu Mohammed, DW1 — Zainab Garba'
+    initialParties?.witnesses?.join(', ') || 'PW1 — Malam Sani Ringim, DW1 — Aliyu Adamu Gumel'
   );
 
   if (!isOpen) return null;
 
   const handleSubmit = (startRecording: boolean) => {
     const caseInfo: CaseInformation = {
-      case_number: caseNumber.trim() || 'FHC/KN/CS/1042/2026',
-      court: court.trim() || 'Federal High Court, Kano',
-      judge: judge.trim() || 'Hon. Justice M. S. Abubakar',
+      case_number: caseNumber.trim() || 'JGS/SCA/DTS/CV/018/2026',
+      court: court.trim() || 'Sharia Court of Appeal, Jigawa State',
+      division: 'Dutse Judicial Division',
+      judge: judge.trim() || 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)',
+      coram: [
+        'Hon. Kadi Sani Salihu (Hon. Grand Kadi / Presiding)',
+        'Hon. Kadi Abubakar M. Gumel (Hon. Kadi)',
+        'Hon. Kadi Usman Birnin Kudu (Hon. Kadi)',
+      ],
       hearing_date: hearingDate.trim() || '21 September 2026',
-      hearing_type: hearingType.trim() || 'Motion Hearing',
+      hearing_type: hearingType.trim() || 'Civil Appeal (Islamic Personal Law / Mirath)',
       hearing_no: hearingNo.trim() || '1',
       duration: '00:00:00',
     };
@@ -54,10 +60,10 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
       .filter(Boolean);
 
     const parties: HearingParties = {
-      claimant: claimant.trim() || 'Claimant',
-      counsel_claimant: counselClaimant.trim() || 'Counsel for Claimant',
-      defendant: defendant.trim() || 'Defendant',
-      counsel_defendant: counselDefendant.trim() || 'Counsel for Defendant',
+      claimant: claimant.trim() || 'Appellant',
+      counsel_claimant: counselClaimant.trim() || 'Counsel for Appellant',
+      defendant: defendant.trim() || 'Respondent',
+      counsel_defendant: counselDefendant.trim() || 'Counsel for Respondent',
       witnesses: witnessList.length > 0 ? witnessList : ['PW1'],
     };
 
@@ -93,10 +99,10 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                 <span className="text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   Judicial Hearing Setup
                 </span>
-                <span className="text-[11px] text-emerald-200/80">Federal High Court</span>
+                <span className="text-[11px] text-emerald-200/80">Sharia Court of Appeal, Jigawa State</span>
               </div>
               <h2 className="text-lg font-bold text-white tracking-tight mt-0.5">
-                New Court Proceeding
+                New Court Proceeding / Appeal
               </h2>
             </div>
           </div>
@@ -108,39 +114,51 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
           <div>
             <div className="flex items-center gap-1.5 text-emerald-800 font-bold uppercase tracking-wider text-[11px] mb-3">
               <Scale className="w-3.5 h-3.5 text-[#008751]" />
-              <span>Case Identification</span>
+              <span>Court & Cause Identification</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Suit / Case Number
+                  Appeal / Suit Number
                 </label>
                 <input
                   type="text"
                   value={caseNumber}
                   onChange={(e) => setCaseNumber(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                  placeholder="e.g. FHC/KN/CS/1042/2026"
+                  placeholder="e.g. JGS/SCA/DTS/CV/018/2026"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Court & Judicial Division
+                  Court & Division
                 </label>
                 <input
                   type="text"
+                  list="jigawa-courts-list"
                   value={court}
                   onChange={(e) => setCourt(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                  placeholder="e.g. Federal High Court, Kano"
+                  placeholder="e.g. Sharia Court of Appeal, Jigawa State (Dutse Division)"
                 />
+                <datalist id="jigawa-courts-list">
+                  <option value="Sharia Court of Appeal, Jigawa State (Dutse Division)" />
+                  <option value="Sharia Court of Appeal, Jigawa State (Hadejia Division)" />
+                  <option value="Sharia Court of Appeal, Jigawa State (Kazaure Division)" />
+                  <option value="Sharia Court of Appeal, Jigawa State (Gumel Division)" />
+                  <option value="Sharia Court of Appeal, Jigawa State (Ringim Division)" />
+                  <option value="Sharia Court of Appeal, Jigawa State (Birnin Kudu Division)" />
+                  <option value="Upper Sharia Court, Dutse" />
+                  <option value="Upper Sharia Court, Hadejia" />
+                  <option value="Upper Sharia Court, Kazaure" />
+                </datalist>
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Presiding Judge
+                  Presiding Coram / Grand Kadi
                 </label>
                 <div className="relative">
                   <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -149,7 +167,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                     value={judge}
                     onChange={(e) => setJudge(e.target.value)}
                     className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                    placeholder="e.g. Hon. Justice M. S. Abubakar"
+                    placeholder="e.g. Hon. Kadi Sani Salihu (Hon. Grand Kadi)"
                   />
                 </div>
               </div>
@@ -172,31 +190,34 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Hearing Type
+                  Hearing Nature / Matter Type
                 </label>
                 <select
                   value={hearingType}
                   onChange={(e) => setHearingType(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
                 >
-                  <option value="Motion Hearing">Motion Hearing (Notice of Motion)</option>
-                  <option value="Substantive Trial">Substantive Trial / Examination</option>
-                  <option value="Delivery of Ruling">Delivery of Ruling / Judgment</option>
-                  <option value="Arraignment">Arraignment / Plea Taking</option>
-                  <option value="Case Management Conference">Case Management Conference</option>
+                  <option value="Civil Appeal (Islamic Personal Law / Mirath)">Civil Appeal (Mirath / Inheritance & Estate Distribution)</option>
+                  <option value="Civil Appeal (Hadanah & Nafaqah)">Civil Appeal (Custody & Child Maintenance)</option>
+                  <option value="Civil Appeal (Nikah & Talaq)">Civil Appeal (Matrimonial Causes / Dissolution of Marriage)</option>
+                  <option value="Civil Appeal (Shuf'ah & Farmland Ownership)">Civil Appeal (Pre-emption & Land Ownership)</option>
+                  <option value="Civil Appeal (Mu'amalat & Commercial Debt)">Civil Appeal (Islamic Commercial Transactions & Debts)</option>
+                  <option value="Motion for Extension of Time to Appeal">Motion for Extension of Time to Appeal</option>
+                  <option value="Substantive Appeal Hearing">Substantive Appeal Hearing / Oral Arguments</option>
+                  <option value="Delivery of Judgment / Ruling">Delivery of Judgment / Ruling</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Hearing Number
+                  Hearing Session No.
                 </label>
                 <input
                   type="text"
                   value={hearingNo}
                   onChange={(e) => setHearingNo(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                  placeholder="e.g. 4"
+                  placeholder="e.g. 2"
                 />
               </div>
             </div>
@@ -208,62 +229,62 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
           <div>
             <div className="flex items-center gap-1.5 text-emerald-800 font-bold uppercase tracking-wider text-[11px] mb-3">
               <Users className="w-3.5 h-3.5 text-[#008751]" />
-              <span>Parties & Appearances</span>
+              <span>Parties & Representation (Wakilai)</span>
             </div>
 
             <div className="space-y-3">
-              {/* Claimant */}
+              {/* Claimant / Appellant */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-emerald-50/40 rounded-2xl border border-emerald-100">
                 <div>
                   <label className="block text-[11px] font-semibold text-emerald-950 mb-1">
-                    Claimant / Applicant
+                    Appellant / Claimant (Mai Daukaka Kara / Mai Kara)
                   </label>
                   <input
                     type="text"
                     value={claimant}
                     onChange={(e) => setClaimant(e.target.value)}
                     className="w-full px-3 py-1.5 bg-white border border-emerald-200 rounded-lg font-semibold text-slate-900 focus:outline-none focus:border-[#008751]"
-                    placeholder="e.g. ABC Limited"
+                    placeholder="e.g. Alhaji Haruna Garba & Ors"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-emerald-950 mb-1">
-                    Claimant's Counsel
+                    Counsel / Wakil for Appellant
                   </label>
                   <input
                     type="text"
                     value={counselClaimant}
                     onChange={(e) => setCounselClaimant(e.target.value)}
                     className="w-full px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-slate-900 focus:outline-none focus:border-[#008751]"
-                    placeholder="e.g. Barr. Ibrahim Gambo"
+                    placeholder="e.g. Barr. Ibrahim Gambo Dutse"
                   />
                 </div>
               </div>
 
-              {/* Defendant */}
+              {/* Defendant / Respondent */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-800 mb-1">
-                    Defendant / Respondent
+                    Respondent / Defendant (Wanda Ake Daukaka Kara)
                   </label>
                   <input
                     type="text"
                     value={defendant}
                     onChange={(e) => setDefendant(e.target.value)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-semibold text-slate-900 focus:outline-none focus:border-[#008751]"
-                    placeholder="e.g. XYZ Limited"
+                    placeholder="e.g. Malam Mustapha Suleiman"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-800 mb-1">
-                    Defendant's Counsel
+                    Counsel / Wakil for Respondent
                   </label>
                   <input
                     type="text"
                     value={counselDefendant}
                     onChange={(e) => setCounselDefendant(e.target.value)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-[#008751]"
-                    placeholder="e.g. Barr. Aisha Bello"
+                    placeholder="e.g. Barr. Aisha Mohammed Hadejia"
                   />
                 </div>
               </div>
@@ -278,7 +299,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                   value={witnessesText}
                   onChange={(e) => setWitnessesText(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                  placeholder="PW1 — Aliyu Mohammed, DW1 — Zainab Garba"
+                  placeholder="e.g. PW1 — Malam Sani Ringim, DW1 — Aliyu Adamu Gumel"
                 />
               </div>
             </div>

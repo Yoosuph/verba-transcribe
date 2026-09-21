@@ -26,16 +26,16 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
   }> = [];
 
   sessions.forEach((s) => {
-    const caseNum = s.case_info?.case_number || 'FHC/KN/CS/1042/2026';
-    const courtName = s.case_info?.court || 'Federal High Court, Kano';
-    const judgeName = s.case_info?.judge || 'Hon. Justice M. S. Abubakar';
+    const caseNum = s.case_info?.case_number || 'JGS/SCA/DTS/CV/018/2026';
+    const courtName = s.case_info?.court || 'Sharia Court of Appeal of Jigawa State';
+    const judgeName = s.case_info?.judge || 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)';
     const hearingDt = s.case_info?.hearing_date || s.started_at || '21 September 2026';
 
     if (s.hearing_report && s.hearing_report.orders && s.hearing_report.orders.length > 0) {
       s.hearing_report.orders.forEach((ord) => {
         ordersList.push({
           orderText: ord.order,
-          sourceTime: ord.source_time,
+          sourceTime: undefined,
           caseNumber: caseNum,
           court: courtName,
           judge: judgeName,
@@ -77,7 +77,7 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
               Judicial Archive
             </span>
             <h1 className="text-base font-black text-slate-900 tracking-tight leading-tight">
-              Court Orders & Directions
+              Court Orders & Decrees (Hukuncin Kotu)
             </h1>
           </div>
         </div>
@@ -98,7 +98,7 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
             </div>
             <h3 className="text-base font-bold text-slate-900">No Court Orders on Record Yet</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              When a hearing is recorded or analyzed, binding judicial pronouncements and adjournment orders will be catalogued here with verbatim transcript timestamps.
+              When a hearing is recorded or analyzed, binding judicial pronouncements (Hukunci) and adjournment orders will be catalogued here from the proceedings record.
             </p>
           </div>
         ) : (
@@ -133,14 +133,8 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
               <div className="p-3.5 rounded-xl bg-[#082E20] text-white space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-                    Enforceable Court Directive
+                    Enforceable Court Directive (Hukunci)
                   </span>
-                  {item.sourceTime && (
-                    <span className="text-[10px] font-mono text-emerald-300/90 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      <span>[{item.sourceTime}]</span>
-                    </span>
-                  )}
                 </div>
                 <p className="text-xs font-semibold leading-relaxed text-white">
                   {item.orderText}

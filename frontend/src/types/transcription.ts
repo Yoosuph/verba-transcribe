@@ -58,7 +58,9 @@ export interface MeetingSummary {
 export interface CaseInformation {
   case_number: string;
   court: string;
+  division?: string;
   judge: string;
+  coram?: string[];
   hearing_date: string;
   hearing_type: string;
   duration?: string;
@@ -75,7 +77,7 @@ export interface HearingParties {
 
 export interface ProceedingNarrativeItem {
   stage: string;
-  timestamp: string;
+  timestamp?: string;
   speaker: string;
   text: string;
 }
@@ -119,12 +121,14 @@ export interface AdjournmentInfo {
 export interface JudicialHearingReport {
   case: CaseInformation;
   parties: HearingParties;
+  bismillah_header?: string;
   summary: string;
   proceedings: ProceedingNarrativeItem[];
   issues: LegalIssue[];
   submissions: PartySubmissions;
   witness_evidence: WitnessEvidence[];
   exhibits: ExhibitItem[];
+  islamic_authorities?: string[];
   court_observations: string[];
   orders: CourtOrder[];
   action_items: ActionItem[];

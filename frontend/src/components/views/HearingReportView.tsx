@@ -9,7 +9,6 @@ import {
   Scale,
   Gavel,
   AlertCircle,
-  ExternalLink,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -26,7 +25,7 @@ interface HearingReportViewProps {
 export const HearingReportView: React.FC<HearingReportViewProps> = ({
   session,
   onBack,
-  onJumpToTimestamp,
+  onJumpToTimestamp: _onJumpToTimestamp,
 }) => {
   const [report, setReport] = useState<JudicialHearingReport | null>(
     session.hearing_report || null
@@ -98,29 +97,36 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
   const handleCopyMarkdown = () => {
     if (!report) return;
     const lines: string[] = [];
+    lines.push('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ');
+    lines.push('IN THE NAME OF ALLAH, THE MOST BENEFICENT, THE MOST MERCIFUL\n');
     lines.push(`# IN THE ${report.case.court.toUpperCase()}`);
-    lines.push(`## SUIT NO: ${report.case.case_number}`);
-    lines.push(`**BETWEEN:** ${report.parties.claimant} (Claimant)`);
-    lines.push(`**AND:** ${report.parties.defendant} (Defendant)\n`);
-    lines.push(`### 1. EXECUTIVE SUMMARY`);
+    lines.push(`## HOLDEN AT ${report.case.division ? report.case.division.toUpperCase() : 'DUTSE (DUTSE JUDICIAL DIVISION)'}`);
+    lines.push(`### APPEAL / SUIT NO: ${report.case.case_number}`);
+    lines.push(`**CORAM:** ${report.case.judge}`);
+    if (report.case.coram && report.case.coram.length > 0) {
+      report.case.coram.forEach((kadi) => lines.push(`- ${kadi}`));
+    }
+    lines.push(`\n**BETWEEN:**`);
+    lines.push(`${report.parties.claimant} (Appellant / Mai Daukaka Kara)`);
+    lines.push(`*Counsel / Wakil:* ${report.parties.counsel_claimant}\n`);
+    lines.push(`**— AND / DA —**\n`);
+    lines.push(`**AND:**`);
+    lines.push(`${report.parties.defendant} (Respondent / Wanda Ake Daukaka Kara)`);
+    lines.push(`*Counsel / Wakil:* ${report.parties.counsel_defendant}\n`);
+    lines.push(`### 1. EXECUTIVE SUMMARY OF PROCEEDINGS`);
     lines.push(report.summary + '\n');
-    lines.push(`### 2. COURT ORDERS`);
-    report.orders.forEach((o, i) => lines.push(`${i + 1}. ${o.order} [${o.source_time || ''}]`));
-    lines.push(`\n### 3. ADJOURNMENT`);
+    lines.push(`### 2. COURT ORDERS & DECREES (HUKUNCIN KOTU)`);
+    if (report.orders.length === 0) {
+      lines.push('No judicial orders pronounced on the record for this sitting.');
+    } else {
+      report.orders.forEach((o, i) => lines.push(`${i + 1}. ${o.order}`));
+    }
+    lines.push(`\n### 3. ADJOURNMENT (TA'JIL)`);
     lines.push(`Adjourned to ${report.next_hearing.date} at ${report.next_hearing.time} for ${report.next_hearing.purpose}`);
 
     navigator.clipboard.writeText(lines.join('\n'));
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2000);
-  };
-
-  // Convert time string "HH:MM:SS" to seconds
-  const parseSeconds = (timeStr?: string): number => {
-    if (!timeStr) return 0;
-    const parts = timeStr.replace(/[\[\]]/g, '').split(':').map(Number);
-    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    if (parts.length === 2) return parts[0] * 60 + parts[1];
-    return 0;
   };
 
   if (loading) {
@@ -268,6 +274,16 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
           id="judicial-hearing-report"
           className="max-w-4xl mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-slate-200/80 p-6 sm:p-12 text-slate-900 print:shadow-none print:border-none print:p-0 print:max-w-none print:rounded-none"
         >
+          {/* Bismillah Invocation */}
+          <div className="text-center pb-3 mb-4 border-b border-emerald-950/10">
+            <p className="text-base sm:text-lg font-serif font-bold text-slate-900 tracking-wider">
+              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+            </p>
+            <p className="text-[10px] sm:text-[11px] font-semibold tracking-widest text-[#008751] uppercase mt-0.5">
+              IN THE NAME OF ALLAH, THE MOST BENEFICENT, THE MOST MERCIFUL
+            </p>
+          </div>
+
           {/* Document Crest & Header */}
           <div className="text-center pb-6 border-b-2 border-emerald-950/20 mb-6">
             <div className="flex justify-center mb-2">
@@ -278,14 +294,46 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
               Federal Republic of Nigeria
             </p>
             <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight uppercase font-serif">
-              In The {report.case.court}
+              IN THE {report.case.court.toUpperCase()}
             </h1>
-            <p className="text-xs font-semibold text-slate-600 tracking-wider uppercase mt-1">
-              Holden at Kano Judicial Division
+            <p className="text-xs font-semibold text-slate-700 tracking-wider uppercase mt-1">
+              HOLDEN AT {report.case.division ? report.case.division.toUpperCase() : 'DUTSE (DUTSE JUDICIAL DIVISION)'}
             </p>
 
             <div className="inline-block mt-3 px-4 py-1 rounded-full bg-slate-100 border border-slate-300 text-xs font-mono font-bold text-slate-900">
-              SUIT NO: {report.case.case_number}
+              APPEAL / SUIT NO: {report.case.case_number}
+            </div>
+          </div>
+
+          {/* Coram Panel */}
+          <div className="bg-emerald-50/50 rounded-2xl border border-emerald-900/15 p-4 sm:p-5 mb-6 text-xs">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 block mb-2">
+              BEFORE THEIR LORDSHIPS (CORAM):
+            </span>
+            <div className="space-y-1.5">
+              <p className="font-bold text-slate-950 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008751]" />
+                <span>{report.case.judge}</span>
+              </p>
+              {report.case.coram && report.case.coram.length > 0 ? (
+                report.case.coram.map((kadi, idx) => (
+                  <p key={idx} className="font-medium text-slate-700 flex items-center gap-2 pl-3.5">
+                    <span className="text-slate-400">•</span>
+                    <span>{kadi}</span>
+                  </p>
+                ))
+              ) : (
+                <>
+                  <p className="font-medium text-slate-700 flex items-center gap-2 pl-3.5">
+                    <span className="text-slate-400">•</span>
+                    <span>Hon. Kadi Abubakar M. Gumel (Hon. Kadi)</span>
+                  </p>
+                  <p className="font-medium text-slate-700 flex items-center gap-2 pl-3.5">
+                    <span className="text-slate-400">•</span>
+                    <span>Hon. Kadi Usman Birnin Kudu (Hon. Kadi)</span>
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -294,24 +342,24 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-slate-200/60">
               <div>
                 <span className="font-bold text-slate-900 text-sm">{report.parties.claimant}</span>
-                <p className="text-[11px] text-slate-500">Counsel: <span className="text-slate-800 font-medium">{report.parties.counsel_claimant}</span></p>
+                <p className="text-[11px] text-slate-500">Counsel / Wakil: <span className="text-slate-800 font-medium">{report.parties.counsel_claimant}</span></p>
               </div>
-              <span className="text-[10px] font-bold tracking-widest text-[#008751] uppercase bg-emerald-50 px-2 py-0.5 rounded self-start sm:self-auto border border-emerald-200/60">
-                Claimant / Applicant
+              <span className="text-[10px] font-bold tracking-widest text-[#008751] uppercase bg-emerald-50 px-2.5 py-0.5 rounded self-start sm:self-auto border border-emerald-200/60">
+                Appellant / Mai Daukaka Kara
               </span>
             </div>
 
             <div className="py-1 text-center font-serif italic text-slate-400 font-bold text-[11px]">
-              — AND —
+              — AND / DA —
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pt-2 border-t border-slate-200/60">
               <div>
                 <span className="font-bold text-slate-900 text-sm">{report.parties.defendant}</span>
-                <p className="text-[11px] text-slate-500">Counsel: <span className="text-slate-800 font-medium">{report.parties.counsel_defendant}</span></p>
+                <p className="text-[11px] text-slate-500">Counsel / Wakil: <span className="text-slate-800 font-medium">{report.parties.counsel_defendant}</span></p>
               </div>
-              <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase bg-slate-200/60 px-2 py-0.5 rounded self-start sm:self-auto">
-                Defendant / Respondent
+              <span className="text-[10px] font-bold tracking-widest text-slate-600 uppercase bg-slate-200/60 px-2.5 py-0.5 rounded self-start sm:self-auto">
+                Respondent / Wanda Ake Daukaka Kara
               </span>
             </div>
           </div>
@@ -319,8 +367,12 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
           {/* Section 1: Hearing Metadata Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-[#F8FAF9] rounded-2xl border border-emerald-950/10 mb-8 text-xs">
             <div>
-              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Presiding Judge</span>
+              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Presiding Grand Kadi</span>
               <p className="font-bold text-slate-900">{report.case.judge}</p>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Judicial Division</span>
+              <p className="font-bold text-slate-900">{report.case.division || 'Dutse Division'}</p>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Hearing Date</span>
@@ -329,10 +381,6 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Hearing Type</span>
               <p className="font-bold text-slate-900">{report.case.hearing_type}</p>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Session Duration</span>
-              <p className="font-mono font-bold text-[#008751]">{report.case.duration || '00:00:00'}</p>
             </div>
           </div>
 
@@ -359,126 +407,144 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
           <section className="mb-8 break-inside-avoid">
             <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-[#008751]" />
-              <span>2. Chronological Proceedings Narrative</span>
+              <span>2. Record of Proceedings Narrative (Bayanan Zama)</span>
             </h2>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <th className="py-2.5 px-3 w-24">Time</th>
-                    <th className="py-2.5 px-3 w-40">Stage / Speaker</th>
-                    <th className="py-2.5 px-3">Record of Proceedings</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {report.proceedings.map((proc, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="py-2.5 px-3 font-mono font-bold text-[#008751] align-top">
-                        {onJumpToTimestamp ? (
-                          <button
-                            onClick={() => onJumpToTimestamp(parseSeconds(proc.timestamp))}
-                            className="hover:underline flex items-center gap-1 cursor-pointer"
-                            title="Play audio at this timestamp"
-                          >
-                            <span>{proc.timestamp}</span>
-                            <ExternalLink className="w-2.5 h-2.5 opacity-60 no-print" />
-                          </button>
-                        ) : (
-                          proc.timestamp
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 align-top">
-                        <span className="font-bold text-slate-900 block">{proc.stage}</span>
-                        <span className="text-[10px] text-slate-500 uppercase">{proc.speaker}</span>
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-700 align-top leading-relaxed">
-                        {proc.text}
-                      </td>
+            {report.proceedings.length === 0 ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 italic">
+                Awaiting transcribed verbal proceedings for this session.
+              </div>
+            ) : (
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <th className="py-2.5 px-3 w-52 sm:w-60">Procedural Stage & Participant</th>
+                      <th className="py-2.5 px-3">Substantive Explanation of Proceedings</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {report.proceedings.map((proc, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50">
+                        <td className="py-2.5 px-3 align-top">
+                          <span className="font-bold text-slate-900 block">{proc.stage}</span>
+                          <span className="text-[10px] text-slate-500 uppercase">{proc.speaker}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-700 align-top leading-relaxed text-justify">
+                          {proc.text}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           {/* Section 4: Key Issues Considered */}
           <section className="mb-8 break-inside-avoid">
             <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-[#008751]" />
-              <span>3. Key Issues Considered</span>
+              <span>3. Key Issues for Determination (Abubuwan da Kotu ke Dubawa)</span>
             </h2>
 
-            <div className="space-y-2">
-              {report.issues.map((issue, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs"
-                >
-                  <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-900 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-slate-900 font-medium leading-relaxed">{issue.issue}</p>
-                    {issue.source_time && (
-                      <span className="inline-block mt-1 text-[10px] font-mono font-bold text-[#008751]">
-                        [Transcript: {issue.source_time}]
-                      </span>
-                    )}
+            {report.issues.length === 0 ? (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 italic">
+                No contested legal issues entered on record.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {report.issues.map((issue, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs"
+                  >
+                    <span className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-900 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-slate-900 font-medium leading-relaxed">{issue.issue}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Section 5: Submissions of Counsel */}
           <section className="mb-8 break-inside-avoid">
             <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-[#008751]" />
-              <span>4. Submissions of Counsel</span>
+              <span>4. Submissions of Counsel & Parties (Hujjojin Masu Kara)</span>
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               {/* Claimant */}
               <div className="p-4 rounded-2xl bg-emerald-50/40 border border-emerald-200/80">
                 <h3 className="font-bold text-emerald-950 text-xs uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>Claimant / Applicant</span>
+                  <span>Appellant / Mai Daukaka Kara</span>
                   <span className="text-[10px] font-normal text-emerald-700">{report.parties.counsel_claimant}</span>
                 </h3>
-                <ul className="space-y-2 text-slate-700">
-                  {report.submissions.claimant.map((sub, idx) => (
-                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
-                      <span className="text-[#008751] font-bold">•</span>
-                      <span>{sub}</span>
-                    </li>
-                  ))}
-                </ul>
+                {report.submissions.claimant.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No submissions recorded.</p>
+                ) : (
+                  <ul className="space-y-2 text-slate-700">
+                    {report.submissions.claimant.map((sub, idx) => (
+                      <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                        <span className="text-[#008751] font-bold">•</span>
+                        <span>{sub}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {/* Defendant */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                 <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider mb-2 flex items-center justify-between">
-                  <span>Defendant / Respondent</span>
+                  <span>Respondent / Wanda Ake Daukaka Kara</span>
                   <span className="text-[10px] font-normal text-slate-500">{report.parties.counsel_defendant}</span>
                 </h3>
-                <ul className="space-y-2 text-slate-700">
-                  {report.submissions.defendant.map((sub, idx) => (
-                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
-                      <span className="text-slate-400 font-bold">•</span>
-                      <span>{sub}</span>
-                    </li>
-                  ))}
-                </ul>
+                {report.submissions.defendant.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No submissions recorded.</p>
+                ) : (
+                  <ul className="space-y-2 text-slate-700">
+                    {report.submissions.defendant.map((sub, idx) => (
+                      <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                        <span className="text-slate-400 font-bold">•</span>
+                        <span>{sub}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           </section>
 
-          {/* Section 6: Witness Evidence & Exhibits (if present) */}
+          {/* Section 6: Islamic Jurisprudence & Legal Authorities */}
+          {report.islamic_authorities && report.islamic_authorities.length > 0 && (
+            <section className="mb-8 break-inside-avoid">
+              <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-[#008751]" />
+                <span>5. Applicable Islamic Jurisprudence & Authorities (Fiqh)</span>
+              </h2>
+              <div className="p-4 rounded-2xl bg-emerald-50/40 border border-emerald-200/80 space-y-2 text-xs">
+                {report.islamic_authorities.map((auth, idx) => (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="text-[#008751] font-bold">§</span>
+                    <span className="text-slate-800 font-medium leading-relaxed">{auth}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Section 7: Witness Evidence & Exhibits (if present) */}
           {(report.witness_evidence?.length > 0 || report.exhibits?.length > 0) && (
             <section className="mb-8 break-inside-avoid">
               <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-[#008751]" />
-                <span>5. Evidence & Exhibits</span>
+                <span>6. Evidence & Exhibits (Bayanan Shaidu & Hujjoji)</span>
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -486,15 +552,12 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
                 {report.witness_evidence?.length > 0 && (
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
-                      Witness Testimony
+                      Witness Testimony (Shaidu)
                     </span>
                     <div className="space-y-3">
                       {report.witness_evidence.map((wit, idx) => (
                         <div key={idx} className="border-b border-slate-200/60 pb-2 last:border-0 last:pb-0">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900">{wit.witness}</span>
-                            {wit.timestamp && <span className="font-mono text-[10px] text-[#008751] font-bold">[{wit.timestamp}]</span>}
-                          </div>
+                          <span className="font-bold text-slate-900">{wit.witness}</span>
                           <p className="text-slate-600 mt-1 leading-relaxed">{wit.summary}</p>
                           {wit.cross_examination && (
                             <p className="text-slate-500 text-[11px] italic mt-1">Cross-Exam: {wit.cross_examination}</p>
@@ -509,7 +572,7 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
                 {report.exhibits?.length > 0 && (
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
-                      Tendered Exhibits
+                      Tendered Exhibits (Hujjojin da aka Gabatar)
                     </span>
                     <div className="space-y-2">
                       {report.exhibits.map((ex, idx) => (
@@ -528,40 +591,41 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
             </section>
           )}
 
-          {/* Section 7: Court Orders & Directions */}
+          {/* Section 8: Court Orders & Directions */}
           <section className="mb-8 break-inside-avoid">
             <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-[#008751]" />
-              <span>6. Court Orders & Directions</span>
+              <span>Court Orders & Decrees (Hukuncin Kotu & Umarni)</span>
             </h2>
 
-            <div className="p-5 rounded-2xl bg-[#082E20] text-white space-y-3">
-              {report.orders.map((ord, idx) => (
-                <div key={idx} className="flex items-start gap-3 border-b border-white/10 pb-3 last:border-0 last:pb-0">
-                  <div className="w-6 h-6 rounded-lg bg-white/15 text-emerald-300 font-bold flex items-center justify-center flex-shrink-0 text-xs mt-0.5">
-                    {idx + 1}
+            {report.orders.length === 0 ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 italic">
+                No judicial orders or decrees pronounced on the record for this session.
+              </div>
+            ) : (
+              <div className="p-5 rounded-2xl bg-[#082E20] text-white space-y-3">
+                {report.orders.map((ord, idx) => (
+                  <div key={idx} className="flex items-start gap-3 border-b border-white/10 pb-3 last:border-0 last:pb-0">
+                    <div className="w-6 h-6 rounded-lg bg-white/15 text-emerald-300 font-bold flex items-center justify-center flex-shrink-0 text-xs mt-0.5">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold leading-relaxed text-white">
+                        {ord.order}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold leading-relaxed text-white">
-                      {ord.order}
-                    </p>
-                    {ord.source_time && (
-                      <span className="text-[10px] text-emerald-300/80 font-mono mt-1 block">
-                        Pronounced at [{ord.source_time}]
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </section>
 
-          {/* Section 8: Compliance & Action Items */}
+          {/* Section 9: Compliance & Action Items */}
           {report.action_items?.length > 0 && (
             <section className="mb-8 break-inside-avoid">
               <h2 className="text-sm font-black tracking-tight text-slate-950 uppercase flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 rounded-full bg-[#008751]" />
-                <span>7. Compliance & Action Deadlines</span>
+                <span>Compliance & Action Deadlines</span>
               </h2>
 
               <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -587,11 +651,11 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
             </section>
           )}
 
-          {/* Section 9: Adjournment & Next Hearing */}
+          {/* Section 10: Adjournment & Next Hearing */}
           <section className="mb-8 p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 text-xs break-inside-avoid">
             <h3 className="font-bold text-amber-950 uppercase tracking-wider text-[11px] mb-1 flex items-center gap-1.5">
               <Gavel className="w-3.5 h-3.5 text-amber-800" />
-              <span>8. Adjournment & Next Hearing</span>
+              <span>Adjournment & Next Hearing Date (Ta'jil)</span>
             </h3>
             <p className="text-amber-950 font-semibold leading-relaxed mt-1">
               Matter stands adjourned to <span className="underline decoration-amber-500 font-bold">{report.next_hearing.date}</span> at{' '}
@@ -600,18 +664,50 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
             </p>
           </section>
 
-          {/* Formal Judicial Signature Block */}
-          <div className="pt-8 mt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-xs break-inside-avoid">
-            <div className="text-center">
-              <div className="w-44 border-b border-slate-400 mx-auto mb-2" />
-              <p className="font-bold text-slate-900">{report.case.judge}</p>
-              <p className="text-[10px] text-slate-500 uppercase">Presiding Judge</p>
+          {/* Formal Judicial Signature & Certification Block */}
+          <div className="pt-8 mt-8 border-t border-slate-200 space-y-8 text-xs break-inside-avoid">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+              <div>
+                <div className="w-40 border-b border-slate-400 mx-auto mb-2 pt-6" />
+                <p className="font-bold text-slate-900">{report.case.judge}</p>
+                <p className="text-[10px] text-slate-500 uppercase">Hon. Grand Kadi / Presiding</p>
+              </div>
+
+              <div>
+                <div className="w-40 border-b border-slate-400 mx-auto mb-2 pt-6" />
+                <p className="font-bold text-slate-900">
+                  {report.case.coram && report.case.coram[0] ? report.case.coram[0] : 'Hon. Kadi Abubakar M. Gumel'}
+                </p>
+                <p className="text-[10px] text-slate-500 uppercase">Honourable Kadi</p>
+              </div>
+
+              <div>
+                <div className="w-40 border-b border-slate-400 mx-auto mb-2 pt-6" />
+                <p className="font-bold text-slate-900">
+                  {report.case.coram && report.case.coram[1] ? report.case.coram[1] : 'Hon. Kadi Usman Birnin Kudu'}
+                </p>
+                <p className="text-[10px] text-slate-500 uppercase">Honourable Kadi</p>
+              </div>
             </div>
 
-            <div className="text-center">
-              <div className="w-44 border-b border-slate-400 mx-auto mb-2" />
-              <p className="font-bold text-slate-900">Registrar / Court Clerk</p>
-              <p className="text-[10px] text-slate-500 uppercase">Federal High Court</p>
+            <div className="border border-slate-200 rounded-2xl p-4 bg-slate-50/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#008751] block mb-0.5">
+                  Court Registry Certification
+                </span>
+                <p className="text-xs font-semibold text-slate-800">
+                  Certified True Copy of Recorded Proceedings
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Sharia Court of Appeal of Jigawa State • Dutse Judicial Division
+                </p>
+              </div>
+
+              <div className="text-center flex-shrink-0">
+                <div className="w-44 border-b border-slate-400 mx-auto mb-1 pt-4" />
+                <p className="font-bold text-slate-900 text-xs">Chief Registrar / Court Clerk</p>
+                <p className="text-[10px] text-slate-400 uppercase">Seal & Signature</p>
+              </div>
             </div>
           </div>
 

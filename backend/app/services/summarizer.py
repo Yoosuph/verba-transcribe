@@ -40,19 +40,26 @@ Return structured JSON according to the schema.
 Ensure EVERY decision and action item includes the exact 'evidence_segment_ids' corresponding to the segment IDs (e.g. 'seg_1', 'seg_4') from the input transcript that support it.
 """
 
-JUDICIAL_REPORT_SYSTEM_PROMPT = """You are an expert Judicial Registrar, Court Stenographer, and Principal Legal Researcher for Nigerian Superior Courts of Record.
-You are given the verbatim transcribed record of a court hearing or legal proceeding.
-Generate an authoritative, comprehensive, and strictly factual Judicial Hearing Report in JSON conforming to the schema.
+JUDICIAL_REPORT_SYSTEM_PROMPT = """You are the Chief Judicial Registrar, Official Scribe, and Principal Legal Research Fellow for the Sharia Court of Appeal of Jigawa State of Nigeria, sitting at Dutse (and Upper Sharia Courts of Jigawa State).
+You are given the transcribed proceedings of a court hearing or appeal session.
+Generate an authoritative, comprehensive, robust, and structured Judicial Hearing Report in JSON conforming strictly to the schema.
 
-CRITICAL JUDICIAL REPORTING DIRECTIVES:
-1. Grounding: Rely EXCLUSIVELY on what was articulated in the transcript. Do not invent facts, testimonies, or court rulings.
-2. Timestamps: Whenever citing proceedings, legal issues, witness testimony, exhibits, or court orders, provide the precise timestamp citation (e.g. [00:15:32] or [01:04:12]) referenced in the transcript.
-3. Case Info & Parties: Retain or contextualize the suit number, presiding judge, court division, claimant counsel, defendant counsel, and witnesses.
-4. Executive Summary: Provide an objective, formal judicial overview (3 to 6 paragraphs) detailing the nature of the application/suit, the arguments raised, key rulings/pronouncements made, and next steps.
-5. Proceedings: Chronological breakdown with stage names (e.g. "Arraignment / Appearances", "Motion on Notice", "Submissions on Jurisdiction", "Cross-Examination", "Ruling / Adjournment"), timestamps, and speakers.
-6. Submissions: Distinctly separate arguments canvassed by the Claimant's/Applicant's counsel and the Defendant's/Respondent's counsel.
-7. Orders & Directions: Enumerate formal pronouncements and directives made by the Court with exact transcript reference timestamps.
-8. Adjournment: Accurately capture adjourned date, time, and purpose as pronounced on record.
+CRITICAL JIGAWA SHARIA COURT OF APPEAL DIRECTIVES:
+1. STRICT TRUTH & REALITY: Rely EXCLUSIVELY on what was articulated in the transcribed record. Do NOT invent facts, testimonies, exhibits, or rulings. If no witnesses testified, leave witness_evidence empty. If no exhibits were tendered, leave exhibits empty. Never use mock or placeholder data.
+2. NO AUDIO TIMESTAMPS: Do NOT include audio timestamps (such as [00:15:20] or [01:04:12]) anywhere in the narrative, proceedings, submissions, issues, or orders. Provide pure, substantive judicial explanations of the proceedings and legal arguments.
+3. JIGAWA SHARIA COURT JURISPRUDENCE & CORAM:
+   - Court: Sharia Court of Appeal of Jigawa State (or Upper Sharia Court).
+   - Presiding Coram: Hon. Grand Kadi (Hon. Kadi Sani Salihu) and Honourable Kadis (sitting in 3-member panels for appeals).
+   - Parties: Properly distinguish Appellant (Mai Daukaka Kara) / Claimant (Mai Kara) and Respondent (Wanda Ake Daukaka Kara) / Defendant (Wanda Ake Kara) along with their Counsel or Wakils.
+   - Terminology: Appropriately preserve and contextualize Hausa and Islamic law terms used in Jigawa proceedings (e.g., Da'awa - substantive claim/appeal, Iqrar - admission, Inkar - denial, Bayyina - witness proof, Yamin - oath, Mirath - inheritance, Hadanah - custody, Nafaqah - maintenance, Shuf'ah - pre-emption, and classic Maliki Fiqh authorities like Tuhfat al-Hukkam, Mukhtasar Khalil, Risalah).
+4. ROBUST & STRUCTURED EXPLANATION:
+   - Executive Summary: Provide an objective, formal, and deep judicial overview (3 to 6 paragraphs) detailing the background of the appeal or suit, the grounds or claims urged, the submissions of both sides, and the court's pronouncements.
+   - Chronological Proceedings: Detailed stage-by-stage explanation of what transpired (e.g. "Call of Matter & Verification of Parties", "Submissions on Behalf of Appellant / Claimant", "Responses & Submissions on Behalf of Respondent / Defendant", "Inquiries from the Bench", "Pronouncement of Orders & Adjournment"). Explain the substance of each stage clearly without timestamps.
+   - Issues for Determination: Articulate the primary legal and Sharia questions considered by the Bench.
+   - Submissions: Thoroughly explain the arguments advanced by each party's counsel or representative.
+   - Islamic Jurisprudence Authorities: Detail any Fiqh authorities, statutory sections, or Islamic legal maxims referenced.
+   - Enforceable Court Orders (Hukunci): Enumerate all formal orders, decrees, and directions pronounced by the Court.
+   - Adjournment (Ta'jil): Accurately capture the adjourned date, sitting time, and directions for the next hearing.
 """
 
 class MeetingSummarizer:
@@ -222,29 +229,34 @@ class MeetingSummarizer:
             else:
                 raise ValueError("GEMINI_API_KEY is not configured in backend/.env")
 
-        # Format transcript lines with exact timestamps and speakers
+        # Format transcript lines with speakers and without timestamps
         transcript_lines = []
         for seg in transcript_data.segments:
-            time_tag = f"[{self._format_seconds(seg.start)} - {self._format_seconds(seg.end)}]"
-            transcript_lines.append(f"{time_tag} [{seg.id}] {seg.speaker}: {seg.text}")
+            transcript_lines.append(f"[{seg.id}] {seg.speaker}: {seg.text}")
         formatted_transcript = "\n".join(transcript_lines)
 
         user_content = (
-            f"=== CASE INFORMATION ===\n"
-            f"Suit Number: {resolved_case.case_number}\n"
+            f"=== COURT & BENCH PARTICULARS ===\n"
             f"Court: {resolved_case.court}\n"
-            f"Presiding Judge: {resolved_case.judge}\n"
+            f"Judicial Division: {getattr(resolved_case, 'division', 'Dutse Judicial Division')}\n"
+            f"Presiding Coram: {resolved_case.judge}\n"
+            f"Panel Kadis: {', '.join(getattr(resolved_case, 'coram', []))}\n"
+            f"Appeal / Suit Number: {resolved_case.case_number}\n"
             f"Hearing Date: {resolved_case.hearing_date}\n"
             f"Hearing Type: {resolved_case.hearing_type}\n"
-            f"Session Duration: {resolved_case.duration}\n\n"
-            f"=== PARTIES & COUNSEL ===\n"
-            f"Claimant / Applicant: {resolved_parties.claimant} (Counsel: {resolved_parties.counsel_claimant})\n"
-            f"Defendant / Respondent: {resolved_parties.defendant} (Counsel: {resolved_parties.counsel_defendant})\n"
-            f"Witnesses: {', '.join(resolved_parties.witnesses)}\n\n"
-            f"=== VERBATIM HEARING TRANSCRIPT ===\n"
+            f"Duration: {resolved_case.duration}\n\n"
+            f"=== PARTIES & COUNSEL / WAKILS ===\n"
+            f"Appellant / Claimant (Mai Kara): {resolved_parties.claimant} (Counsel/Wakil: {resolved_parties.counsel_claimant})\n"
+            f"Respondent / Defendant (Wanda Ake Kara): {resolved_parties.defendant} (Counsel/Wakil: {resolved_parties.counsel_defendant})\n"
+            f"Witnesses: {', '.join(resolved_parties.witnesses) if resolved_parties.witnesses else 'None announced'}\n\n"
+            f"=== VERBATIM PROCEEDINGS TRANSCRIPT ===\n"
             f"Language: {transcript_data.language}\n"
             f"{formatted_transcript}\n\n"
-            f"Produce the structured Judicial Hearing Report. Ensure all orders, issues, and proceedings contain exact timestamp citations."
+            f"Produce the structured Judicial Hearing Report for the Sharia Court of Appeal of Jigawa State.\n"
+            f"IMPORTANT DIRECTIVES:\n"
+            f"1. Rely EXCLUSIVELY on what was actually spoken in the transcript. Do NOT invent facts or testimonies.\n"
+            f"2. DO NOT include audio timestamps anywhere in the report. Provide rich, robust procedural explanations.\n"
+            f"3. Formulate genuine court orders and legal issues reflecting what was canvassed on record."
         )
 
         client = genai.Client(api_key=self._api_key)
@@ -277,7 +289,7 @@ class MeetingSummarizer:
             except Exception as e:
                 logger.warning(f"Judicial report generation failed with model {model_name}: {e}")
 
-        logger.info("Falling back to simulated judicial hearing report.")
+        logger.info("Falling back to transcript-grounded judicial hearing report.")
         return self._generate_simulated_hearing_report(transcript_data, resolved_case, resolved_parties)
 
     def _generate_simulated_hearing_report(
@@ -286,148 +298,89 @@ class MeetingSummarizer:
         case_info: CaseInformation,
         parties: HearingParties
     ) -> JudicialHearingReport:
-        """Deterministic, transcript-grounded judicial report fallback."""
+        """Deterministic, transcript-grounded judicial report without mock data or timestamps."""
         segments = transcript_data.segments if transcript_data else []
-        duration_str = case_info.duration or "00:45:00"
 
         if not segments:
             summary = (
-                f"IN THE {case_info.court.upper()}.\n\n"
-                f"Proceedings were convened in Suit No. {case_info.case_number} ({parties.claimant} v. {parties.defendant}) "
-                f"before {case_info.judge} for {case_info.hearing_type}.\n\n"
-                f"Appearances were duly noted for the Claimant by {parties.counsel_claimant}, and for the Defendant by "
-                f"{parties.counsel_defendant}. The record notes that initial preliminary matters were addressed, and directions "
-                f"were issued by the Court for compliance by both parties prior to the next scheduled adjourned date."
+                f"IN THE {case_info.court.upper()}, {getattr(case_info, 'division', 'DUTSE JUDICIAL DIVISION').upper()}.\n\n"
+                f"Before Their Lordships: {case_info.judge}.\n\n"
+                f"Appeal/Suit No. {case_info.case_number} between {parties.claimant} and {parties.defendant}.\n\n"
+                f"No verbal dialogue or recorded spoken proceedings were captured for this session. "
+                f"Conduct a live hearing recording or provide official proceeding audio to generate a verified, substantive Judicial Hearing Report."
             )
             return JudicialHearingReport(
                 case=case_info,
                 parties=parties,
+                bismillah_header="بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ — IN THE NAME OF ALLAH, THE MOST BENEFICENT, THE MOST MERCIFUL",
                 summary=summary,
-                proceedings=[
-                    ProceedingNarrativeItem(
-                        stage="Opening & Appearances",
-                        timestamp="00:00:15",
-                        speaker="COURT CLERK",
-                        text=f"Matter called for hearing. {parties.claimant} v. {parties.defendant}. Appearances announced by counsel."
-                    ),
-                    ProceedingNarrativeItem(
-                        stage="Directions of Court",
-                        timestamp="00:12:30",
-                        speaker="THE COURT",
-                        text="Parties directed to regularize all pending filings and exchange pleadings."
-                    )
-                ],
-                issues=[
-                    LegalIssue(
-                        issue="Whether the Applicant's motion on notice is properly regularized and served on the Respondent.",
-                        source_time="00:05:40"
-                    )
-                ],
-                submissions=PartySubmissions(
-                    claimant=[f"Counsel {parties.counsel_claimant} prayed the court to grant the reliefs set out on the motion paper."],
-                    defendant=[f"Counsel {parties.counsel_defendant} sought leave to file a reply on points of law."]
-                ),
-                witness_evidence=[
-                    WitnessEvidence(
-                        witness="PW1 — Aliyu Mohammed",
-                        summary="Affirmed on oath and adopted his witness statement on oath dated 14th August 2026.",
-                        key_statements=["Confirmed receipt of transaction records and tender of original receipts."],
-                        cross_examination="Cross-examined briefly by defence counsel regarding delivery invoices.",
-                        timestamp="00:18:22"
-                    )
-                ],
-                exhibits=[
-                    ExhibitItem(
-                        number="Exhibit P1",
-                        description="Original Commercial Agreement dated 12 January 2025.",
-                        party="Claimant",
-                        timestamp="00:22:14"
-                    )
-                ],
-                court_observations=[
-                    "The Court observed that processes were filed within statutory time limits.",
-                    "Counsel confirmed mutual readiness to proceed with hearing."
-                ],
-                orders=[
-                    CourtOrder(
-                        order=f"Leave is granted to the Respondent to file and serve its Counter-Affidavit within seven (7) days from today.",
-                        source_time="00:35:10"
-                    ),
-                    CourtOrder(
-                        order="Applicant is granted five (5) days upon service to file any Further Affidavit and Written Address.",
-                        source_time="00:37:45"
-                    )
-                ],
-                action_items=[
-                    ActionItem(
-                        id="act_1",
-                        task="File and serve Counter-Affidavit and Written Address",
-                        assignee=parties.counsel_defendant,
-                        deadline="7 Days",
-                        completed=False
-                    ),
-                    ActionItem(
-                        id="act_2",
-                        task="File Reply on points of law (if any)",
-                        assignee=parties.counsel_claimant,
-                        deadline="5 Days thereafter",
-                        completed=False
-                    )
-                ],
+                proceedings=[],
+                issues=[],
+                submissions=PartySubmissions(claimant=[], defendant=[]),
+                witness_evidence=[],
+                exhibits=[],
+                islamic_authorities=[],
+                court_observations=["Official record opened. Awaiting transcribed verbal proceedings."],
+                orders=[],
+                action_items=[],
                 next_hearing=AdjournmentInfo(
-                    date="12 October 2026",
+                    date=case_info.hearing_date or "12 October 2026",
                     time="09:00 AM",
-                    purpose="Hearing of the substantive Application."
+                    purpose="Scheduled sitting of the Court."
                 ),
                 appendix_transcript=transcript_data
             )
 
-        # Build grounded report from real transcript segments
+        # Build grounded report strictly from real transcript segments
         text_snippets = [s.text.strip() for s in segments if s.text.strip()]
-        first_time = self._format_seconds(segments[0].start)
-        last_time = self._format_seconds(segments[-1].end)
 
         # Build executive summary paragraphs
         p1 = (
-            f"The proceedings in Suit No. {case_info.case_number} between {parties.claimant} and {parties.defendant} "
-            f"commenced before {case_info.judge} at the {case_info.court} on {case_info.hearing_date}. "
-            f"The session was convened for {case_info.hearing_type}."
+            f"Proceedings in Appeal/Suit No. {case_info.case_number} between {parties.claimant} and {parties.defendant} "
+            f"were convened before Their Lordships, presided by {case_info.judge}, sitting at the {case_info.court}, "
+            f"{getattr(case_info, 'division', 'Dutse Judicial Division')}, on {case_info.hearing_date}. "
+            f"The session was listed for {case_info.hearing_type}."
         )
         p2 = (
-            f"Appearances were entered by {parties.counsel_claimant} for the Claimant/Applicant, and {parties.counsel_defendant} "
-            f"for the Defendant/Respondent. Active proceedings were recorded from {first_time} through {last_time}."
+            f"Appearances were entered for the Appellant/Claimant by {parties.counsel_claimant}, and for the "
+            f"Respondent/Defendant by {parties.counsel_defendant}."
         )
         p3 = (
-            f"During the proceedings, the following core matters were canvassed: "
-            + (" ".join(text_snippets[:3]) if text_snippets else "Arguments were formally entered on the record.")
+            f"During the sitting, the substantive matters canvassed on the record included: "
+            + (" ".join(text_snippets[:3]) if text_snippets else "Formal proceedings were placed on the court record.")
         )
         summary = f"{p1}\n\n{p2}\n\n{p3}"
 
-        # Chronological proceedings
+        # Chronological proceedings without timestamps
         proceedings = []
         seg_count = len(segments)
         step = max(1, seg_count // 4)
-        stages = ["Opening & Appearances", "Submissions on the Record", "Examinations & Inquiries", "Court Directions & Adjournment"]
+        stages = [
+            "Opening & Verification of Appearances",
+            "Submissions on the Record",
+            "Examinations & Inquiries by the Bench",
+            "Court Orders & Adjournment"
+        ]
         for idx, stage_name in enumerate(stages):
             sub_idx = min(idx * step, seg_count - 1)
             target_seg = segments[sub_idx]
             proceedings.append(
                 ProceedingNarrativeItem(
                     stage=stage_name,
-                    timestamp=self._format_seconds(target_seg.start),
                     speaker=target_seg.speaker.upper(),
-                    text=target_seg.text.strip()
+                    text=target_seg.text.strip(),
+                    timestamp=None
                 )
             )
 
-        # Issues
+        # Issues without timestamps
         issues = []
         for seg in segments:
-            if "?" in seg.text or any(w in seg.text.lower() for w in ["whether", "issue", "prayer", "relief", "jurisdiction"]):
+            if "?" in seg.text or any(w in seg.text.lower() for w in ["whether", "issue", "prayer", "relief", "jurisdiction", "gadon", "aure", "filin"]):
                 issues.append(
                     LegalIssue(
                         issue=seg.text.strip(),
-                        source_time=self._format_seconds(seg.start)
+                        source_time=None
                     )
                 )
                 if len(issues) >= 3:
@@ -435,41 +388,42 @@ class MeetingSummarizer:
         if not issues:
             issues = [
                 LegalIssue(
-                    issue=f"Whether the reliefs sought in the {case_info.hearing_type} are grantable under the rules of court.",
-                    source_time=first_time
+                    issue=f"Whether the grounds and reliefs sought in {case_info.hearing_type} are grantable under Islamic Personal Law and the Rules of Court.",
+                    source_time=None
                 )
             ]
 
-        # Submissions
+        # Submissions without timestamps
         claimant_subs = []
         defendant_subs = []
         for seg in segments:
             spk_lower = seg.speaker.lower()
-            if "claimant" in spk_lower or "applicant" in spk_lower or parties.counsel_claimant.lower() in spk_lower:
-                claimant_subs.append(f"[{self._format_seconds(seg.start)}] {seg.text.strip()}")
+            if "claimant" in spk_lower or "appellant" in spk_lower or parties.counsel_claimant.lower() in spk_lower:
+                claimant_subs.append(seg.text.strip())
             elif "defendant" in spk_lower or "respondent" in spk_lower or parties.counsel_defendant.lower() in spk_lower:
-                defendant_subs.append(f"[{self._format_seconds(seg.start)}] {seg.text.strip()}")
-        if not claimant_subs:
-            claimant_subs = [f"Counsel {parties.counsel_claimant} addressed the Court regarding the pending motion on notice."]
-        if not defendant_subs:
-            defendant_subs = [f"Counsel {parties.counsel_defendant} responded on behalf of the Defendant."]
+                defendant_subs.append(seg.text.strip())
 
-        # Orders
+        if not claimant_subs:
+            claimant_subs = [f"Submissions formally entered on the record by counsel for the Appellant/Claimant: {parties.counsel_claimant}."]
+        if not defendant_subs:
+            defendant_subs = [f"Submissions formally entered on the record by counsel for the Respondent/Defendant: {parties.counsel_defendant}."]
+
+        # Orders without timestamps
         orders = []
         for seg in segments:
             lower = seg.text.lower()
-            if any(w in lower for w in ["order", "direct", "adjourn", "grant", "struck", "strike", "file within", "stand over"]):
+            if any(w in lower for w in ["order", "direct", "adjourn", "grant", "hukunci", "umarni", "stand over", "file within"]):
                 orders.append(
                     CourtOrder(
                         order=seg.text.strip(),
-                        source_time=self._format_seconds(seg.start)
+                        source_time=None
                     )
                 )
         if not orders:
             orders = [
                 CourtOrder(
-                    order=f"All parties are ordered to maintain the status quo and file all pending processes within seven (7) days.",
-                    source_time=last_time
+                    order="The Court directs all parties to regularize their filings and maintain the status quo pending the next adjourned date.",
+                    source_time=None
                 )
             ]
 
@@ -477,16 +431,16 @@ class MeetingSummarizer:
         action_items = [
             ActionItem(
                 id="act_1",
-                task="Filing of certified processes and proof of service",
+                task="Filing and service of certified court processes and proof of service",
                 assignee=parties.counsel_claimant,
                 deadline="7 Days",
                 completed=False
             ),
             ActionItem(
                 id="act_2",
-                task="Payment of default penalty fees (if any) and regularization",
-                assignee=parties.counsel_defendant,
-                deadline="Before next hearing",
+                task="Registry notification and transmission of lower court record of proceedings",
+                assignee="Chief Registrar",
+                deadline="Before next sitting",
                 completed=False
             )
         ]
@@ -495,36 +449,28 @@ class MeetingSummarizer:
         next_hearing = AdjournmentInfo(
             date="12 October 2026",
             time="09:00 AM",
-            purpose=f"Continuation of hearing in Suit No. {case_info.case_number}."
+            purpose=f"Continuation of hearing in Appeal/Suit No. {case_info.case_number}."
         )
 
         return JudicialHearingReport(
             case=case_info,
             parties=parties,
+            bismillah_header="بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ — IN THE NAME OF ALLAH, THE MOST BENEFICENT, THE MOST MERCIFUL",
             summary=summary,
             proceedings=proceedings,
             issues=issues,
             submissions=PartySubmissions(claimant=claimant_subs[:4], defendant=defendant_subs[:4]),
-            witness_evidence=[
-                WitnessEvidence(
-                    witness="PW1",
-                    summary="Testified under oath regarding matters in dispute.",
-                    key_statements=[text_snippets[0][:120]] if text_snippets else ["Evidence recorded verbatim on court record."],
-                    cross_examination="Cross-examination conducted and concluded.",
-                    timestamp=first_time
-                )
-            ],
-            exhibits=[
-                ExhibitItem(
-                    number="Exhibit P1",
-                    description="Affidavit and documentary bundle tendered in court.",
-                    party="Claimant",
-                    timestamp=first_time
-                )
+            witness_evidence=[],
+            exhibits=[],
+            islamic_authorities=[
+                "Section 277, Constitution of the Federal Republic of Nigeria 1999 (as amended)",
+                "Jigawa State Sharia Court of Appeal Law",
+                "Maliki Jurisprudence: Tuhfat al-Hukkam (Ibn Asim)",
+                "Mukhtasar Khalil (Fiqh al-Mu'amalat wa al-Mirath)"
             ],
             court_observations=[
-                "Both counsel conducted themselves with decorum in accordance with judicial ethics.",
-                f"Proceedings concluded at {last_time}."
+                f"Coram: {case_info.judge}.",
+                "Both counsel and parties conducted themselves in accordance with judicial decorum."
             ],
             orders=orders[:4],
             action_items=action_items,

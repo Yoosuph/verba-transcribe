@@ -14,7 +14,7 @@ import { updateCaseInfo } from '../../services/api';
 import { Mic, FileText, FileCheck, Scale, Plus, Gavel } from 'lucide-react';
 import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
-const LOCAL_STORAGE_KEY = 'judicial_hearings_sessions_v2';
+const LOCAL_STORAGE_KEY = 'jigawa_sharia_court_sessions_v3';
 
 const PAGE_ORDER: Record<string, number> = {
   meetings: 0,
@@ -26,21 +26,27 @@ const PAGE_ORDER: Record<string, number> = {
 };
 
 const DEFAULT_CASE_INFO: CaseInformation = {
-  case_number: 'FHC/KN/CS/1042/2026',
-  court: 'Federal High Court, Kano',
-  judge: 'Hon. Justice M. S. Abubakar',
+  case_number: 'JGS/SCA/DTS/CV/018/2026',
+  court: 'Sharia Court of Appeal, Jigawa State',
+  division: 'Dutse Judicial Division',
+  judge: 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)',
+  coram: [
+    'Hon. Kadi Sani Salihu (Hon. Grand Kadi / Presiding)',
+    'Hon. Kadi Abubakar M. Gumel (Hon. Kadi)',
+    'Hon. Kadi Usman Birnin Kudu (Hon. Kadi)',
+  ],
   hearing_date: '21 September 2026',
-  hearing_type: 'Motion Hearing',
+  hearing_type: 'Civil Appeal (Islamic Personal Law / Mirath)',
   duration: '00:00:00',
-  hearing_no: '4',
+  hearing_no: '2',
 };
 
 const DEFAULT_PARTIES: HearingParties = {
-  claimant: 'ABC Limited',
-  counsel_claimant: 'Barr. Ibrahim Gambo',
-  defendant: 'XYZ Limited',
-  counsel_defendant: 'Barr. Aisha Bello',
-  witnesses: ['PW1 — Aliyu Mohammed', 'DW1 — Zainab Garba'],
+  claimant: 'Alhaji Haruna Garba & Ors (Mai Daukaka Kara / Appellant)',
+  counsel_claimant: 'Barr. Ibrahim Gambo Dutse',
+  defendant: 'Malam Mustapha Suleiman (Wanda Ake Daukaka Kara / Respondent)',
+  counsel_defendant: 'Barr. Aisha Mohammed Hadejia',
+  witnesses: ['PW1 — Malam Sani Ringim', 'DW1 — Aliyu Adamu Gumel'],
 };
 
 export const MainLayout: React.FC = () => {
@@ -247,10 +253,10 @@ export const MainLayout: React.FC = () => {
                 <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
                 <div>
                   <h1 className="text-xs sm:text-sm font-bold tracking-tight text-slate-900 leading-tight">
-                    Federal High Court
+                    Sharia Court of Appeal
                   </h1>
                   <p className="text-[10px] text-slate-500 leading-none hidden sm:block">
-                    Kano Judicial Division
+                    Jigawa State Judiciary · Dutse
                   </p>
                 </div>
               </div>
