@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Menu,
   FileText,
@@ -37,110 +38,130 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
   return (
     <div className="w-full px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 z-50 flex-shrink-0 select-none no-print">
       <nav
-        className={`w-full rounded-2xl p-1.5 flex items-center justify-between gap-1 shadow-xl transition-all duration-300 relative ${
+        className={`w-full rounded-2xl p-1.5 grid grid-cols-4 gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.07)] transition-all duration-300 relative ${
           isRoyal
-            ? 'bg-white/15 backdrop-blur-xl border border-white/20 text-white'
-            : 'bg-white/95 backdrop-blur-xl border border-slate-200/80 text-slate-700 shadow-slate-200/50'
+            ? 'bg-[#042A1D]/90 backdrop-blur-xl border border-emerald-500/30 text-white'
+            : 'bg-white/95 backdrop-blur-xl border border-slate-200/90 text-slate-700'
         }`}
       >
-        {/* Fluid Animated Sliding Pill Indicator */}
+        {/* Precise Sliding Pill Indicator with zero-drift math */}
         {activeIndex >= 0 && (
           <div
-            className={`absolute top-1.5 bottom-1.5 rounded-xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-md pointer-events-none ${
+            className={`absolute top-1.5 bottom-1.5 rounded-xl transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] shadow-sm pointer-events-none ${
               isRoyal
                 ? 'bg-white shadow-emerald-950/20'
-                : 'bg-[#008751] shadow-emerald-700/25'
+                : 'bg-[#008751] shadow-emerald-800/25'
             }`}
             style={{
-              width: 'calc((100% - 16px) / 4)',
+              width: 'calc((100% - 24px) / 4)',
               left: '6px',
               transform: `translateX(calc(${activeIndex} * (100% + 4px)))`,
             }}
           />
         )}
 
-        {/* 1. Meetings */}
+        {/* 1. Cause Docket / Hearings */}
         <button
           onClick={() => onNavigate('meetings')}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 touch-press ${
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 ${
             activePage === 'meetings'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
               : isRoyal
-              ? 'text-white/75 hover:text-white'
-              : 'text-slate-500 hover:text-slate-900'
+              ? 'text-white/70 hover:text-white'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          title="Court Proceedings"
+          title="Cause Docket & Proceedings"
         >
-          <Menu className={`w-4 h-4 transition-transform duration-200 ${activePage === 'meetings' ? 'scale-110' : 'scale-100'}`} />
-          <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
+          <Menu
+            className={`w-4 h-4 transition-transform duration-200 ${
+              activePage === 'meetings' ? 'scale-110' : 'scale-100'
+            }`}
+          />
+          <span className="text-[11px] mt-1 tracking-tight font-semibold truncate">
             Hearings
           </span>
         </button>
 
-        {/* 2. Transcript & Record */}
+        {/* 2. Court Record & Audio */}
         <button
           onClick={() => onNavigate('transcript')}
           disabled={!hasSession}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 touch-press ${
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${
+            !hasSession
+              ? 'opacity-30 cursor-not-allowed'
+              : 'cursor-pointer active:scale-95'
+          } ${
             activePage === 'transcript' || activePage === 'summary'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
-              : !hasSession
-              ? 'opacity-35 cursor-not-allowed'
               : isRoyal
-              ? 'text-white/75 hover:text-white'
-              : 'text-slate-500 hover:text-slate-900'
+              ? 'text-white/70 hover:text-white'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          title="Court Transcript & Audio Record"
+          title="Court Record & Audio Playback"
         >
-          <FileText className={`w-4 h-4 transition-transform duration-200 ${activePage === 'transcript' || activePage === 'summary' ? 'scale-110' : 'scale-100'}`} />
-          <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
+          <FileText
+            className={`w-4 h-4 transition-transform duration-200 ${
+              activePage === 'transcript' || activePage === 'summary' ? 'scale-110' : 'scale-100'
+            }`}
+          />
+          <span className="text-[11px] mt-1 tracking-tight font-semibold truncate">
             Record
           </span>
         </button>
 
-        {/* 3. Hearing Report */}
+        {/* 3. Judicial Hearing Report */}
         <button
           onClick={() => onNavigate('report')}
           disabled={!hasSession}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 touch-press ${
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${
+            !hasSession
+              ? 'opacity-30 cursor-not-allowed'
+              : 'cursor-pointer active:scale-95'
+          } ${
             activePage === 'report'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
-              : !hasSession
-              ? 'opacity-35 cursor-not-allowed'
               : isRoyal
-              ? 'text-white/75 hover:text-white'
-              : 'text-slate-500 hover:text-slate-900'
+              ? 'text-white/70 hover:text-white'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          title="Judicial Hearing Report & PDF / DOCX Export"
+          title="Judicial Hearing Report & PDF / Word Export"
         >
-          <Scale className={`w-4 h-4 transition-transform duration-200 ${activePage === 'report' ? 'scale-110' : 'scale-100'}`} />
-          <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
+          <Scale
+            className={`w-4 h-4 transition-transform duration-200 ${
+              activePage === 'report' ? 'scale-110' : 'scale-100'
+            }`}
+          />
+          <span className="text-[11px] mt-1 tracking-tight font-semibold truncate">
             Report
           </span>
         </button>
 
-        {/* 4. Court Orders */}
+        {/* 4. Court Orders & Decrees */}
         <button
           onClick={() => onNavigate('actions')}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-2 px-1 sm:px-2 rounded-xl transition-all duration-200 touch-press ${
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 ${
             activePage === 'actions'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
               : isRoyal
-              ? 'text-white/75 hover:text-white'
-              : 'text-slate-500 hover:text-slate-900'
+              ? 'text-white/70 hover:text-white'
+              : 'text-slate-600 hover:text-slate-900'
           }`}
-          title="Official Court Orders & Adjournment"
+          title="Enforceable Court Orders & Adjournments"
         >
-          <Gavel className={`w-4 h-4 transition-transform duration-200 ${activePage === 'actions' ? 'scale-110' : 'scale-100'}`} />
-          <span className="text-[11px] mt-1 tracking-tight font-medium truncate">
+          <Gavel
+            className={`w-4 h-4 transition-transform duration-200 ${
+              activePage === 'actions' ? 'scale-110' : 'scale-100'
+            }`}
+          />
+          <span className="text-[11px] mt-1 tracking-tight font-semibold truncate">
             Orders
           </span>
         </button>

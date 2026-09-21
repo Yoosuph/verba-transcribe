@@ -178,7 +178,7 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700 cursor-pointer"
+            className="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 active:scale-[0.98] transition-all flex items-center justify-center text-slate-700 shadow-xs cursor-pointer"
             title="Back to Session"
           >
             <ChevronLeft className="w-5 h-5" />
@@ -197,16 +197,16 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopyMarkdown}
-            className="hidden sm:inline-flex px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 text-xs font-medium transition-all items-center gap-1.5 cursor-pointer"
+            className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 active:scale-[0.98] text-slate-700 text-xs font-semibold transition-all items-center gap-1.5 cursor-pointer shadow-xs"
             title="Copy Markdown"
           >
-            {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
             <span>{copySuccess ? 'Copied' : 'Copy'}</span>
           </button>
 
           <button
             onClick={handleDownloadDocx}
-            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-950 border border-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+            className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-[0.98] text-emerald-950 border border-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Download Word Document (.docx)"
           >
             <FileDown className="w-3.5 h-3.5 text-[#008751]" />
@@ -215,7 +215,7 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
 
           <button
             onClick={handlePrint}
-            className="px-3.5 py-2 rounded-xl bg-[#008751] hover:bg-[#007043] active:scale-95 text-white text-xs font-bold shadow-md shadow-emerald-700/25 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-[#008751] hover:bg-[#007345] active:scale-[0.98] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
             title="Export or Print Official PDF"
           >
             <Printer className="w-3.5 h-3.5" />

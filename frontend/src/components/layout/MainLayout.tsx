@@ -310,7 +310,7 @@ export const MainLayout: React.FC = () => {
           <div
             key={activePage}
             className={`flex-1 min-h-0 flex flex-col overflow-hidden relative ${
-              activePage !== 'live' ? 'pt-[68px] sm:pt-[74px]' : ''
+              activePage !== 'live' ? 'pt-[76px] sm:pt-[82px]' : ''
             } ${
               navDirection === 'forward'
                 ? 'page-enter-forward'
@@ -450,6 +450,7 @@ export const MainLayout: React.FC = () => {
                   setSelectedSession(session);
                   navigateTo('transcript', 'forward');
                 }}
+                onStartHearing={() => setIsNewHearingModalOpen(true)}
               />
             )}
           </div>
