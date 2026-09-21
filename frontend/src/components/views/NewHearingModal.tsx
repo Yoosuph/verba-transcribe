@@ -1,5 +1,18 @@
-import React, { useState } from 'react';
-import { X, Mic, Scale, Calendar, User, Users, Building, Hash } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  Mic,
+  Scale,
+  Calendar,
+  User,
+  Users,
+  Building,
+  Hash,
+  Sparkles,
+  RotateCcw,
+  Bookmark,
+  Gavel,
+} from 'lucide-react';
 import type { CaseInformation, HearingParties } from '../../types/transcription';
 import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
@@ -32,6 +45,42 @@ const MATTER_TYPES = [
   { value: 'Delivery of Judgment / Ruling', label: 'Delivery of Judgment / Ruling' },
 ];
 
+const FAST_TRACK_PRESETS = [
+  {
+    name: 'Estate Distribution (Mirath)',
+    court: 'Sharia Court of Appeal of Jigawa State',
+    division: 'Dutse Judicial Division',
+    matterType: 'Civil Appeal (Islamic Personal Law / Mirath)',
+    claimant: 'Alhaji Haruna Garba & Ors',
+    counselClaimant: 'Barr. Ibrahim Gambo Dutse',
+    defendant: 'Malam Mustapha Suleiman',
+    counselDefendant: 'Barr. Aisha Mohammed Hadejia',
+    serial: 18,
+  },
+  {
+    name: 'Land Pre-emption (Shuf\'ah)',
+    court: 'Sharia Court of Appeal of Jigawa State',
+    division: 'Hadejia Judicial Division',
+    matterType: 'Civil Appeal (Shuf\'ah & Land Ownership)',
+    claimant: 'Alhaji Bello Ringim',
+    counselClaimant: 'Barr. I. K. Dutse',
+    defendant: 'Hajiya Maryam Hadejia',
+    counselDefendant: 'Ustaz A. U. Gumel',
+    serial: 25,
+  },
+  {
+    name: 'Child Custody (Hadanah)',
+    court: 'Sharia Court of Appeal of Jigawa State',
+    division: 'Kazaure Judicial Division',
+    matterType: 'Civil Appeal (Hadanah & Nafaqah)',
+    claimant: 'Fatima Aliyu Babura',
+    counselClaimant: 'Legal Aid Council (Jigawa)',
+    defendant: 'Usman Garba Kazaure',
+    counselDefendant: 'In Person (Da Kansa)',
+    serial: 12,
+  },
+];
+
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
@@ -49,7 +98,9 @@ export const parseToIsoDate = (dateStr?: string): string => {
     const day = match[1].padStart(2, '0');
     const monthName = match[2].toLowerCase();
     const year = match[3];
-    const monthIdx = MONTH_NAMES.findIndex(m => m.toLowerCase().startsWith(monthName.slice(0, 3)));
+    const monthIdx = MONTH_NAMES.findIndex((m) =>
+      m.toLowerCase().startsWith(monthName.slice(0, 3))
+    );
     if (monthIdx !== -1) {
       const month = String(monthIdx + 1).padStart(2, '0');
       return `${year}-${month}-${day}`;
@@ -78,6 +129,21 @@ export const formatIsoToReadableDate = (isoStr: string): string => {
   return isoStr;
 };
 
+export const computeSuitNumber = (
+  courtType: string,
+  divisionId: string,
+  matterType: string,
+  serial: number = 18,
+  year: number = new Date().getFullYear()
+): string => {
+  const isUpper = courtType.includes('Upper');
+  const courtCode = isUpper ? 'USC' : 'SCA';
+  const divObj = JIGAWA_DIVISIONS.find((d) => d.id === divisionId) || JIGAWA_DIVISIONS[0];
+  const causeCode = matterType.toLowerCase().includes('motion') ? 'MOT' : 'CV';
+  const paddedSerial = String(serial).padStart(3, '0');
+  return `JGS/${courtCode}/${divObj.code}/${causeCode}/${paddedSerial}/${year}`;
+};
+
 export const NewHearingModal: React.FC<NewHearingModalProps> = ({
   isOpen,
   onClose,
@@ -94,14 +160,17 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
   const [division, setDivision] = useState(
     initialCaseInfo?.division || 'Dutse Judicial Division'
   );
-  const [caseNumber, setCaseNumber] = useState(
-    initialCaseInfo?.case_number || 'JGS/SCA/DTS/CV/018/2026'
+  const [serialCounter, setSerialCounter] = useState(18);
+  const [isCustomCaseNumber, setIsCustomCaseNumber] = useState(false);
+  const [caseNumber, setCaseNumber] = useState(() =>
+    initialCaseInfo?.case_number || computeSuitNumber(court, division, 'Civil Appeal (Islamic Personal Law / Mirath)', 18)
   );
+
   const [judge, setJudge] = useState(
     initialCaseInfo?.judge || 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)'
   );
   const [hearingDate, setHearingDate] = useState(() =>
-    parseToIsoDate(initialCaseInfo?.hearing_date || '2026-09-21')
+    parseToIsoDate(initialCaseInfo?.hearing_date)
   );
   const [hearingType, setHearingType] = useState(
     initialCaseInfo?.hearing_type || 'Civil Appeal (Islamic Personal Law / Mirath)'
@@ -111,44 +180,62 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
   );
 
   const [claimant, setClaimant] = useState(
-    initialParties?.claimant || 'Alhaji Haruna Garba & Ors (Mai Daukaka Kara / Appellant)'
+    initialParties?.claimant?.replace(/\s*\([^)]*\)\s*$/, '') || 'Alhaji Haruna Garba & Ors'
   );
   const [counselClaimant, setCounselClaimant] = useState(
     initialParties?.counsel_claimant || 'Barr. Ibrahim Gambo Dutse'
   );
   const [defendant, setDefendant] = useState(
-    initialParties?.defendant || 'Malam Mustapha Suleiman (Wanda Ake Daukaka Kara / Respondent)'
+    initialParties?.defendant?.replace(/\s*\([^)]*\)\s*$/, '') || 'Malam Mustapha Suleiman'
   );
   const [counselDefendant, setCounselDefendant] = useState(
     initialParties?.counsel_defendant || 'Barr. Aisha Mohammed Hadejia'
   );
 
+  // Automatically update suit number when court, division, or matter type changes (if not manually overridden)
+  useEffect(() => {
+    if (!isCustomCaseNumber) {
+      setCaseNumber(computeSuitNumber(court, division, hearingType, serialCounter));
+    }
+  }, [court, division, hearingType, serialCounter, isCustomCaseNumber]);
+
+  // Automatically update presiding judge when court changes
+  useEffect(() => {
+    if (court === 'Sharia Court of Appeal of Jigawa State') {
+      setJudge('Hon. Kadi Sani Salihu (Hon. Grand Kadi)');
+    } else {
+      const divLabel = division.replace(' Judicial Division', '');
+      setJudge(`Hon. Alkali (Upper Sharia Court, ${divLabel})`);
+    }
+  }, [court, division]);
+
   if (!isOpen) return null;
 
-  const handleDivisionChange = (newDivision: string) => {
-    setDivision(newDivision);
-    const found = JIGAWA_DIVISIONS.find((d) => d.id === newDivision);
-    if (found) {
-      setCaseNumber((prev) => {
-        const match = prev.match(/^(JGS\/(?:SCA|USC)\/)[A-Z]{3}(\/.*)$/);
-        if (match) {
-          return `${match[1]}${found.code}${match[2]}`;
-        }
-        return prev;
-      });
-    }
+  const handleRegenerateSuitNumber = () => {
+    const nextSerial = serialCounter >= 99 ? 1 : serialCounter + 1;
+    setSerialCounter(nextSerial);
+    setIsCustomCaseNumber(false);
+    setCaseNumber(computeSuitNumber(court, division, hearingType, nextSerial));
   };
 
-  const handleCourtChange = (newCourt: string) => {
-    setCourt(newCourt);
-    const isUpper = newCourt.includes('Upper');
-    setCaseNumber((prev) => {
-      if (isUpper) {
-        return prev.replace('/SCA/', '/USC/');
-      } else {
-        return prev.replace('/USC/', '/SCA/');
-      }
-    });
+  const handleApplyPreset = (preset: typeof FAST_TRACK_PRESETS[0]) => {
+    setCourt(preset.court);
+    setDivision(preset.division);
+    setHearingType(preset.matterType);
+    setClaimant(preset.claimant);
+    setCounselClaimant(preset.counselClaimant);
+    setDefendant(preset.defendant);
+    setCounselDefendant(preset.counselDefendant);
+    setSerialCounter(preset.serial);
+    setIsCustomCaseNumber(false);
+    setCaseNumber(computeSuitNumber(preset.court, preset.division, preset.matterType, preset.serial));
+  };
+
+  const setQuickDateOffset = (offsetDays: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    setHearingDate(iso);
   };
 
   const handleSubmit = (startRecording: boolean) => {
@@ -157,28 +244,41 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
       ? `Upper Sharia Court, ${division.replace(' Judicial Division', '')}`
       : 'Sharia Court of Appeal, Jigawa State';
 
+    const coramPanel = court === 'Upper Sharia Court'
+      ? [judge.trim()]
+      : [
+          'Hon. Kadi Sani Salihu (Hon. Grand Kadi / Presiding)',
+          'Hon. Kadi Abubakar M. Gumel (Hon. Kadi)',
+          'Hon. Kadi Usman Birnin Kudu (Hon. Kadi)',
+        ];
+
     const caseInfo: CaseInformation = {
-      case_number: caseNumber.trim() || 'JGS/SCA/DTS/CV/018/2026',
+      case_number: caseNumber.trim() || computeSuitNumber(court, division, hearingType, serialCounter),
       court: resolvedCourt,
       division: division,
-      judge: judge.trim() || 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)',
-      coram: [
-        'Hon. Kadi Sani Salihu (Hon. Grand Kadi / Presiding)',
-        'Hon. Kadi Abubakar M. Gumel (Hon. Kadi)',
-        'Hon. Kadi Usman Birnin Kudu (Hon. Kadi)',
-      ],
+      judge: judge.trim(),
+      coram: coramPanel,
       hearing_date: formattedHearingDate,
       hearing_type: hearingType,
       hearing_no: hearingNo.toString().trim() || '1',
       duration: '00:00:00',
     };
 
+    // Automatically format official suffixes for litigants
+    const formattedClaimant = claimant.trim()
+      ? (claimant.includes('(') ? claimant.trim() : `${claimant.trim()} (Mai Daukaka Kara / Appellant)`)
+      : 'Appellant / Mai Daukaka Kara';
+
+    const formattedDefendant = defendant.trim()
+      ? (defendant.includes('(') ? defendant.trim() : `${defendant.trim()} (Wanda Ake Daukaka Kara / Respondent)`)
+      : 'Respondent / Wanda Ake Daukaka Kara';
+
     const parties: HearingParties = {
-      claimant: claimant.trim() || 'Appellant / Mai Daukaka Kara',
-      counsel_claimant: counselClaimant.trim() || 'Counsel for Appellant',
-      defendant: defendant.trim() || 'Respondent / Wanda Ake Daukaka Kara',
-      counsel_defendant: counselDefendant.trim() || 'Counsel for Respondent',
-      witnesses: [], // Real empty initial list, no fabricated mock witnesses
+      claimant: formattedClaimant,
+      counsel_claimant: counselClaimant.trim() || 'In Person (Da Kansa)',
+      defendant: formattedDefendant,
+      counsel_defendant: counselDefendant.trim() || 'In Person (Da Kansa)',
+      witnesses: [], // Clean, strictly captured from live transcript
     };
 
     if (startRecording) {
@@ -213,7 +313,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-bold tracking-widest uppercase px-2 py-0.5 rounded bg-emerald-400/20 text-emerald-300 border border-emerald-400/30">
-                  Judicial Hearing Setup
+                  Automated Registry Setup
                 </span>
                 <span className="text-[11px] text-emerald-200/90 font-medium">Jigawa State Judiciary</span>
               </div>
@@ -230,20 +330,44 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
             e.preventDefault();
             handleSubmit(true);
           }}
-          className="p-4 sm:p-6 overflow-y-auto space-y-5 text-slate-800 text-xs"
+          className="p-4 sm:p-6 overflow-y-auto space-y-4 text-slate-800 text-xs"
         >
-          {/* Section 1: Court & Bench */}
+          {/* Quick-Fill Cause Templates Bar (1-Click Fill) */}
+          <div className="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200/70">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                <Bookmark className="w-3 h-3 text-[#008751]" />
+                <span>Fast-Track Hearing Presets (1-Click Auto-Fill)</span>
+              </span>
+              <span className="text-[10px] text-emerald-700 font-medium">Select to auto-populate</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {FAST_TRACK_PRESETS.map((preset, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleApplyPreset(preset)}
+                  className="px-2.5 py-1 rounded-xl bg-white hover:bg-emerald-100/60 active:scale-95 text-emerald-900 border border-emerald-200 text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Sparkles className="w-3 h-3 text-[#008751]" />
+                  <span>{preset.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 1: Court Jurisdiction & Auto Suit Number */}
           <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-emerald-900 font-bold uppercase tracking-wider text-[11px]">
                 <Scale className="w-3.5 h-3.5 text-[#008751]" />
                 <span>1. Court Jurisdiction & Bench (Mazaunin Shari'a)</span>
               </div>
-              <span className="text-[10px] text-slate-500 font-medium">Jigawa State</span>
+              <span className="text-[10px] text-slate-500 font-medium">Auto-configured</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Court System */}
+              {/* Court Type */}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
                   <Building className="w-3 h-3 text-slate-400" />
@@ -251,7 +375,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                 </label>
                 <select
                   value={court}
-                  onChange={(e) => handleCourtChange(e.target.value)}
+                  onChange={(e) => setCourt(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
                 >
                   <option value="Sharia Court of Appeal of Jigawa State">Sharia Court of Appeal of Jigawa State</option>
@@ -267,7 +391,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                 </label>
                 <select
                   value={division}
-                  onChange={(e) => handleDivisionChange(e.target.value)}
+                  onChange={(e) => setDivision(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
                 >
                   {JIGAWA_DIVISIONS.map((div) => (
@@ -278,43 +402,74 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                 </select>
               </div>
 
-              {/* Appeal / Suit Number */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                  <Hash className="w-3 h-3 text-slate-400" />
-                  <span>Appeal / Suit Number</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={caseNumber}
-                  onChange={(e) => setCaseNumber(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                  placeholder="e.g. JGS/SCA/DTS/CV/018/2026"
-                />
+              {/* AUTOMATIC Suit / Appeal Number */}
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <Hash className="w-3 h-3 text-slate-400" />
+                    <span>Appeal / Suit Number</span>
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <Sparkles className="w-2.5 h-2.5 text-[#008751]" />
+                      <span>{isCustomCaseNumber ? 'Customized' : 'Automatic Registry Number'}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRegenerateSuitNumber}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md hover:bg-slate-200 text-slate-600 text-[10px] font-semibold transition-all cursor-pointer"
+                      title="Generate new sequential suit number"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Regenerate</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={caseNumber}
+                    onChange={(e) => {
+                      setCaseNumber(e.target.value);
+                      setIsCustomCaseNumber(true);
+                    }}
+                    className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-slate-900 text-sm tracking-wide focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
+                    placeholder="e.g. JGS/SCA/DTS/CV/018/2026"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Generated per official Jigawa State naming standard: State (JGS) / Court (SCA) / Division / Cause / Serial / Year.
+                </p>
               </div>
 
-              {/* Presiding Grand Kadi / Judge */}
+              {/* Presiding Bench (Automatically set based on court) */}
               <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
                   <User className="w-3 h-3 text-slate-400" />
                   <span>Presiding Grand Kadi / Judge</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={judge}
-                  onChange={(e) => setJudge(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
-                  placeholder="e.g. Hon. Kadi Sani Salihu (Hon. Grand Kadi)"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={judge}
+                    onChange={(e) => setJudge(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
+                    placeholder="e.g. Hon. Kadi Sani Salihu (Hon. Grand Kadi)"
+                  />
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  {court.includes('Upper') ? 'Single Alkali Court' : 'Appellate Bench of 3 Kadis (S. 275 CFRN 1999)'}
+                </span>
               </div>
 
-              {/* Matter Nature / Category */}
-              <div className="sm:col-span-2">
+              {/* Hearing Nature / Cause Category */}
+              <div>
                 <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                  <Scale className="w-3 h-3 text-slate-400" />
-                  <span>Hearing Nature & Cause Category</span>
+                  <Gavel className="w-3 h-3 text-slate-400" />
+                  <span>Cause Category</span>
                 </label>
                 <select
                   value={hearingType}
@@ -331,20 +486,49 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Date & Sitting Schedule */}
+          {/* Section 2: Hearing Date & Session Schedule */}
           <div className="bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 space-y-3">
-            <div className="flex items-center gap-1.5 text-emerald-900 font-bold uppercase tracking-wider text-[11px]">
-              <Calendar className="w-3.5 h-3.5 text-[#008751]" />
-              <span>2. Hearing Schedule & Session (Lokacin Zama)</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-emerald-900 font-bold uppercase tracking-wider text-[11px]">
+                <Calendar className="w-3.5 h-3.5 text-[#008751]" />
+                <span>2. Schedule & Sitting Details (Lokacin Zama)</span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-medium">Automatic Date Defaults</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Native HTML5 Date Input */}
+              {/* Native HTML5 Date Input with Quick Buttons */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-slate-400" />
-                  <span>Hearing Date (Ranar Zama)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-slate-400" />
+                    <span>Hearing Date (Ranar Zama)</span>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setQuickDateOffset(0)}
+                      className="px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDateOffset(1)}
+                      className="px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDateOffset(7)}
+                      className="px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      +1 Week
+                    </button>
+                  </div>
+                </div>
+
                 <input
                   type="date"
                   required
@@ -353,16 +537,45 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">
-                  Report Date: <strong className="text-slate-700 font-semibold">{formatIsoToReadableDate(hearingDate)}</strong>
+                  Official Record Date: <strong className="text-slate-800">{formatIsoToReadableDate(hearingDate)}</strong>
                 </span>
               </div>
 
-              {/* Sitting Session Number */}
+              {/* Sitting Session Number with Quick Chips */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center gap-1">
-                  <Hash className="w-3 h-3 text-slate-400" />
-                  <span>Sitting Session Number (Zama na nawa)</span>
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-semibold text-slate-700 flex items-center gap-1">
+                    <Hash className="w-3 h-3 text-slate-400" />
+                    <span>Sitting Number (Zama na nawa)</span>
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setHearingNo('1')}
+                      className="px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      1st Sitting
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHearingNo('2')}
+                      className="px-1.5 py-0.5 rounded bg-slate-200 hover:bg-slate-300 text-[9px] font-bold text-slate-700 cursor-pointer"
+                    >
+                      Continuation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHearingNo('3');
+                        setHearingType('Delivery of Judgment / Ruling');
+                      }}
+                      className="px-1.5 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-[9px] font-bold text-emerald-900 cursor-pointer"
+                    >
+                      Judgment
+                    </button>
+                  </div>
+                </div>
+
                 <input
                   type="number"
                   min="1"
@@ -374,18 +587,21 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
                   placeholder="1"
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  Indicates whether this is the 1st sitting, continuation, or delivery of judgment.
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Session #{hearingNo} of proceedings.
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Section 3: Parties & Legal Representation */}
+          {/* Section 3: Litigants & Legal Representation */}
           <div className="space-y-3">
-            <div className="flex items-center gap-1.5 text-emerald-900 font-bold uppercase tracking-wider text-[11px]">
-              <Users className="w-3.5 h-3.5 text-[#008751]" />
-              <span>3. Litigants & Legal Representation (Masu Kara & Wakilai)</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-emerald-900 font-bold uppercase tracking-wider text-[11px]">
+                <Users className="w-3.5 h-3.5 text-[#008751]" />
+                <span>3. Litigants & Representation (Masu Kara & Wakilai)</span>
+              </div>
+              <span className="text-[10px] text-slate-400 italic">Titles appended automatically</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -402,7 +618,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Full Name / Title
+                    Appellant Name / Organization
                   </label>
                   <input
                     type="text"
@@ -415,9 +631,27 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Counsel / Legal Representative (Wakil)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-slate-700">
+                      Counsel / Legal Representative (Wakil)
+                    </label>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCounselClaimant('State Counsel (MOJ Jigawa)')}
+                        className="text-[9px] px-1 py-0.5 bg-white border border-emerald-200 rounded text-emerald-800 hover:bg-emerald-100"
+                      >
+                        State
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCounselClaimant('In Person (Da Kansa)')}
+                        className="text-[9px] px-1 py-0.5 bg-white border border-emerald-200 rounded text-emerald-800 hover:bg-emerald-100"
+                      >
+                        Self
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="text"
                     value={counselClaimant}
@@ -441,7 +675,7 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
 
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Full Name / Title
+                    Respondent Name / Organization
                   </label>
                   <input
                     type="text"
@@ -454,9 +688,27 @@ export const NewHearingModal: React.FC<NewHearingModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    Counsel / Legal Representative (Wakil)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-slate-700">
+                      Counsel / Legal Representative (Wakil)
+                    </label>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCounselDefendant('Legal Aid Council (Jigawa)')}
+                        className="text-[9px] px-1 py-0.5 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-200"
+                      >
+                        Legal Aid
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCounselDefendant('In Person (Da Kansa)')}
+                        className="text-[9px] px-1 py-0.5 bg-white border border-slate-200 rounded text-slate-700 hover:bg-slate-200"
+                      >
+                        Self
+                      </button>
+                    </div>
+                  </div>
                   <input
                     type="text"
                     value={counselDefendant}
