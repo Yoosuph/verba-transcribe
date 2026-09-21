@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Optional, List
 from google import genai
 from google.genai import types
@@ -65,12 +66,19 @@ CRITICAL JIGAWA SHARIA COURT OF APPEAL DIRECTIVES:
 class MeetingSummarizer:
     """Generates strictly transcript-grounded meeting summaries with evidence links."""
 
-    def __init__(self):
-        self._api_key = settings.gemini_api_key
+    @property
+    def _api_key(self) -> str:
+        return settings.gemini_api_key
 
-    async def summarize_transcript(self, transcript_data: FinalTranscriptData) -> MeetingSummary:
+    async def summarize_transcript(
+        self,
+        transcript_data: FinalTranscriptData,
+        audio_wav_bytes: Optional[bytes] = None,
+        live_transcript_text: Optional[str] = None
+    ) -> MeetingSummary:
         """
-        Sends ONLY the finalized transcript to Gemini to produce a grounded summary.
+        Sends the finalized transcript — plus the COMPLETE recording when available —
+        to the configured capable model to produce an audio-grounded summary.
         """
         if not self._api_key:
             if settings.mock_mode_if_no_key:
@@ -92,9 +100,15 @@ class MeetingSummarizer:
             f"{formatted_transcript}\n\n"
             f"Generate a strictly grounded summary with evidence segment IDs referencing the [seg_X] tags above."
         )
+        if live_transcript_text and live_transcript_text.strip():
+            user_content += (
+                f"\n\n=== VERIFIED REAL-TIME LIVE TRANSCRIPT (cross-check) ===\n"
+                f"{live_transcript_text.strip()}\n"
+                f"=== END LIVE TRANSCRIPT ==="
+            )
 
         client = genai.Client(api_key=self._api_key)
-        models_to_try = [settings.gemini_summary_model, "gemini-3.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+        models_to_try = [settings.gemini_summary_model] + settings.gemini_summary_fallback_models
 
         for model_name in models_to_try:
             try:
@@ -106,9 +120,16 @@ class MeetingSummarizer:
                     temperature=0.1
                 )
 
+                # Ground the summary in BOTH the transcript and the full recording:
+                # audio resolves ambiguous or mistranscribed passages.
+                contents = (
+                    [types.Part.from_bytes(data=audio_wav_bytes, mime_type="audio/wav"), user_content]
+                    if audio_wav_bytes else user_content
+                )
+
                 response = await client.aio.models.generate_content(
                     model=model_name,
-                    contents=user_content,
+                    contents=contents,
                     config=config
                 )
 
@@ -153,9 +174,11 @@ class MeetingSummarizer:
 
         decisions = []
         action_items = []
+        decision_pattern = re.compile(r"\b(decide[sd]?|agreed?|resolved?|approved?|mun\s+amince|hukunci|zamu)\b")
+        action_pattern = re.compile(r"\b(will|must|should|need\s+to|action|task|zan|zaki|zaka|aikin)\b")
         for idx, seg in enumerate(transcript_data.segments):
             lower = seg.text.lower()
-            if any(w in lower for w in ["decide", "agreed", "resolved", "approved", "mun amince", "hukunci", "zamu"]):
+            if decision_pattern.search(lower):
                 decisions.append(
                     DecisionItem(
                         id=f"dec_{len(decisions) + 1}",
@@ -163,7 +186,7 @@ class MeetingSummarizer:
                         evidence_segment_ids=[seg.id]
                     )
                 )
-            if any(w in lower for w in ["will", "must", "should", "need to", "action", "task", "zan", "zaki", "zaka", "aikin"]):
+            if action_pattern.search(lower):
                 action_items.append(
                     ActionItem(
                         id=f"act_{len(action_items) + 1}",
@@ -208,14 +231,17 @@ class MeetingSummarizer:
         self,
         transcript_data: FinalTranscriptData,
         case_info: Optional[CaseInformation] = None,
-        parties: Optional[HearingParties] = None
+        parties: Optional[HearingParties] = None,
+        audio_wav_bytes: Optional[bytes] = None
     ) -> JudicialHearingReport:
         """
-        Synthesizes the finalized transcript into an authoritative, 12-section Judicial Hearing Report.
+        Synthesizes the finalized transcript — plus the COMPLETE recording when available —
+        into an authoritative, 12-section Judicial Hearing Report using the most
+        capable configured model.
         Conforms strictly to the judicial report schema.
         """
-        resolved_case = case_info or CaseInformation()
-        resolved_parties = parties or HearingParties()
+        resolved_case = (case_info.model_copy(deep=True) if case_info else CaseInformation())
+        resolved_parties = (parties.model_copy(deep=True) if parties else HearingParties())
 
         # Update duration from transcript if available
         if transcript_data and transcript_data.segments:
@@ -260,7 +286,7 @@ class MeetingSummarizer:
         )
 
         client = genai.Client(api_key=self._api_key)
-        models_to_try = [settings.gemini_summary_model, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest"]
+        models_to_try = [settings.gemini_summary_model] + settings.gemini_summary_fallback_models
 
         for model_name in models_to_try:
             try:
@@ -272,9 +298,16 @@ class MeetingSummarizer:
                     temperature=0.1
                 )
 
+                # The full recording accompanies the report request so the capable
+                # model can verify the transcript against the actual proceedings.
+                contents = (
+                    [types.Part.from_bytes(data=audio_wav_bytes, mime_type="audio/wav"), user_content]
+                    if audio_wav_bytes else user_content
+                )
+
                 response = await client.aio.models.generate_content(
                     model=model_name,
-                    contents=user_content,
+                    contents=contents,
                     config=config
                 )
 

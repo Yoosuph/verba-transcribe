@@ -94,6 +94,16 @@ export class AudioProcessor {
           };
 
           sourceNode.connect(this.workletNode);
+          // Keep the worklet pulled on all browsers; use a zero-gain sink
+          // so no microphone audio is audible while guaranteeing onaudioprocess.
+          try {
+            const sink = this.audioContext.createGain();
+            sink.gain.value = 0;
+            this.workletNode.connect(sink);
+            sink.connect(this.audioContext.destination);
+          } catch {
+            this.workletNode.connect(this.audioContext.destination);
+          }
           workletSuccess = true;
         } catch (e) {
           console.warn("AudioWorklet failed to load; using ScriptProcessor fallback:", e);

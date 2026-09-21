@@ -31,7 +31,9 @@ class GeminiLiveTranscriber:
         self._client: Optional[genai.Client] = None
         self._session = None
         self._is_running = False
-        self._send_queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue()
+        # Bounded queue: live transcription tolerates chunk loss better than
+        # unbounded memory growth if the upstream connection stalls.
+        self._send_queue: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=512)
         self._session_task: Optional[asyncio.Task] = None
         self._connected_event = asyncio.Event()
         self._mock_mode = False
@@ -149,7 +151,18 @@ class GeminiLiveTranscriber:
         if not self._is_running:
             return
         self._audio_chunk_count += 1
-        await self._send_queue.put(pcm_data)
+        try:
+            self._send_queue.put_nowait(pcm_data)
+        except asyncio.QueueFull:
+            # Backpressure: drop the oldest chunk rather than stall the socket loop
+            try:
+                self._send_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self._send_queue.put_nowait(pcm_data)
+            except asyncio.QueueFull:
+                logger.warning("[%s] Gemini send queue full; audio chunk dropped.", self.session_id)
 
     async def _send_loop(self, session) -> None:
         """Sends audio chunks from queue to Gemini Live."""

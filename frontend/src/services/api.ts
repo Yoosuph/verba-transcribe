@@ -26,20 +26,38 @@ export async function updateCaseInfo(
   return res.json();
 }
 
+/**
+ * Explicitly generates the Judicial Hearing Report for a session.
+ * Reports are ONLY produced by this user-initiated action — the backend never
+ * auto-generates them on record, upload, or read.
+ */
 export async function generateHearingReport(sessionId: string): Promise<JudicialHearingReport> {
   const res = await fetch(`/api/sessions/${sessionId}/report`, {
     method: 'POST',
   });
-  if (!res.ok) throw new Error('Failed to generate judicial hearing report');
+  if (!res.ok) {
+    if (res.status === 409) throw new Error('A report is already being generated for this session');
+    if (res.status === 404) throw new Error('Session not found');
+    if (res.status === 502) throw new Error('Report generation failed — please try again');
+    throw new Error('Failed to generate judicial hearing report');
+  }
   return res.json();
 }
 
+/** Retrieves a previously generated report (read-only; never triggers generation). */
 export async function getHearingReport(sessionId: string): Promise<JudicialHearingReport> {
   const res = await fetch(`/api/sessions/${sessionId}/report`);
-  if (!res.ok) throw new Error('Failed to retrieve hearing report');
+  if (!res.ok) {
+    if (res.status === 404) throw new Error('Hearing report not generated yet');
+    throw new Error('Failed to retrieve hearing report');
+  }
   return res.json();
 }
 
+/**
+ * Word export URL. The backend refuses (404) until a report has been generated,
+ * so callers must gate this behind report presence.
+ */
 export function getDocxExportUrl(sessionId: string): string {
   return `/api/sessions/${sessionId}/export/docx`;
 }

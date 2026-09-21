@@ -149,8 +149,11 @@ def test_audio_accumulator():
         assert wf.getframerate() == 16000
         assert wf.getnframes() == 16000
 
-@pytest.mark.asyncio
-async def test_websocket_flow():
+def test_websocket_flow(monkeypatch):
+    from app.config import settings
+    # Force the offline mock path so the test never depends on live Gemini availability
+    monkeypatch.setattr(settings, "gemini_api_key", "")
+    monkeypatch.setattr(settings, "mock_mode_if_no_key", True)
     with client.websocket_connect("/ws/transcribe/ws_test_session") as ws:
         connected_msg = ws.receive_json()
         assert connected_msg["type"] == "connected"
@@ -159,19 +162,22 @@ async def test_websocket_flow():
         # Send start
         ws.send_json({"type": "start", "session_id": "ws_test_session", "language_mode": "auto"})
 
-        # Send some dummy 16kHz PCM chunks
+        # Send enough dummy 16kHz PCM chunks to trigger mock transcription cadence
         chunk = b"\x00\x00" * 320  # 20ms chunk
-        ws.send_bytes(chunk)
+        for _ in range(30):
+            ws.send_bytes(chunk)
 
         # Send stop
         ws.send_json({"type": "stop"})
 
-        # Collect events
+        # Collect events with a bound so failures can't hang forever
         event_types = []
-        while True:
+        for _ in range(30):
             msg = ws.receive_json()
             event_types.append(msg["type"])
             if msg["type"] == "complete":
+                break
+            if msg["type"] == "error" and msg.get("code") in ("FINAL_TRANSCRIBE_ERROR", "SUMMARIZATION_ERROR"):
                 break
 
         assert "processing" in event_types

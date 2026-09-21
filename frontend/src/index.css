@@ -68,6 +68,38 @@
   background: linear-gradient(90deg, #008751 0%, #008751 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #008751 66.66%, #008751 100%);
 }
 
+/* Focus visibility for keyboard users */
+:focus-visible {
+  outline: 2px solid #008751;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-forward,
+  .page-enter-backward,
+  .page-enter-up,
+  .page-enter-fade {
+    animation: none;
+  }
+  .streaming-cursor,
+  .animate-ping,
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
+  .touch-press {
+    transition: none;
+  }
+}
+
+/* Readability: comfortable transcript line length */
+.readable-prose {
+  line-height: 1.65;
+  letter-spacing: 0.002em;
+}
+
 /* Navigation Motion Animations */
 @keyframes page-slide-left {
   from {

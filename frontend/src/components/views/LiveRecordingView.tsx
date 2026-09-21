@@ -150,6 +150,13 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
       ? 35
       : 20;
 
+  const stages = [
+    { id: 'final_transcription', label: 'Transcribing court audio' },
+    { id: 'speaker_diarization', label: 'Diarizing testimony & speakers' },
+    { id: 'summarization', label: 'Synthesizing overview & rulings' },
+  ] as const;
+  const stageIndex = processingStage === 'summarization' ? 2 : processingStage === 'speaker_diarization' ? 1 : 0;
+
   // ================= 1. DEDICATED PROCESSING & COMPLETION SCREEN =================
   if (showProcessingScreen) {
     const stageMessage =
@@ -195,7 +202,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
 
           {/* Hairline Minimal Progress Bar */}
           <div className="w-48 space-y-1.5 pt-1">
-            <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden">
+            <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Finalizing proceeding">
               <div
                 className="h-full bg-[#008751] rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${progressPercent}%` }}
@@ -206,6 +213,22 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
               <span className="font-mono">{progressPercent}%</span>
             </div>
           </div>
+
+          {/* Stage checklist for calmer waiting */}
+          <ol className="w-full max-w-[240px] space-y-1.5 text-left" aria-label="Processing stages">
+            {stages.map((s, i) => {
+              const done = i < stageIndex || (i === stageIndex && progressPercent >= 85);
+              const active = i === stageIndex;
+              return (
+                <li key={s.id} className={`flex items-center gap-2 text-[11px] font-medium ${active ? 'text-slate-900' : done ? 'text-[#008751]' : 'text-slate-400'}`}>
+                  <span aria-hidden="true" className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${done ? 'bg-[#008751] text-white' : active ? 'bg-emerald-100 text-[#008751]' : 'bg-slate-100 text-slate-400'}`}>
+                    {done ? '✓' : i + 1}
+                  </span>
+                  <span>{s.label}</span>
+                </li>
+              );
+            })}
+          </ol>
 
           {/* Error Message if Any */}
           {errorMessage && (
@@ -240,7 +263,8 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
       <div className="flex items-center justify-between px-5 pt-4 pb-2 flex-shrink-0">
         <button
           onClick={onMinimize}
-          className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white"
+          aria-label="Minimize to proceedings, recording continues"
+          className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white min-w-[44px]"
           title="Minimize to Proceedings list"
         >
           <ChevronDown className="w-5 h-5" />
@@ -265,7 +289,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
           </div>
         </div>
 
-        <button className="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white">
+        <button aria-label="More options (coming soon)" className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white min-w-[44px]">
           <MoreHorizontal className="w-5 h-5" />
         </button>
       </div>
@@ -296,14 +320,35 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
           ref={canvasRef}
           width={320}
           height={50}
+          role="img"
+          aria-label={isPaused ? 'Audio visualizer paused' : 'Live audio levels'}
           className="w-full h-full max-w-[320px]"
         />
       </div>
 
+      {/* Bookmarks strip */}
+      {bookmarks.length > 0 && (
+        <div className="px-6 pb-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar" aria-label="Marked moments">
+          {bookmarks.map((b, i) => (
+            <span key={`${b}-${i}`} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/15 text-white text-[11px] font-mono whitespace-nowrap">
+              ◉ {formatTime(b)}
+            </span>
+          ))}
+          <button
+            onClick={() => setBookmarks([])}
+            className="text-[11px] text-white/70 hover:text-white underline underline-offset-2 px-1 min-h-[32px] cursor-pointer"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Real Live Transcript Feed */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-3 space-y-4 font-sans text-left"
+        aria-live="polite"
+        aria-label="Live transcript"
+        className="flex-1 overflow-y-auto px-6 py-3 space-y-4 font-sans text-left readable-prose"
       >
         {!hasContent ? (
           <div className="h-full flex flex-col items-center justify-center text-center text-white/60 space-y-2 py-8">

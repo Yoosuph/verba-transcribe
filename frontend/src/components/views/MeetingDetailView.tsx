@@ -24,6 +24,8 @@ interface MeetingDetailViewProps {
   onToggleActionItem?: (actionId: string, completed: boolean) => void;
   onExport?: (format: 'markdown' | 'txt' | 'json') => void;
   onOpenReport?: () => void;
+  /** Invoked by the explicit "Generate Judicial Hearing Report" CTA. */
+  onRequestReport?: () => void;
   initialTab?: 'summary' | 'transcript' | 'actions';
 }
 
@@ -42,6 +44,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
   onToggleActionItem,
   onExport,
   onOpenReport,
+  onRequestReport,
   initialTab = 'summary',
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'actions'>(initialTab);
@@ -95,9 +98,10 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
 
   // Pause audio on unmount
   useEffect(() => {
+    const audioEl = audioRef.current;
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
+      if (audioEl) {
+        audioEl.pause();
       }
     };
   }, []);
@@ -239,7 +243,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
     };
   };
 
-  const handleCopySummary = () => {
+  const handleCopySummary = async () => {
     const text = `${session.title || 'Court Proceeding Summary'}\n\nSuit Number: ${
       session.case_info?.case_number || 'N/A'
     }\nCourt: ${session.case_info?.court || 'Sharia Court of Appeal, Jigawa State'}\n\nOverview:\n${
@@ -251,12 +255,21 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
         .map((a) => `- [${a.completed ? 'x' : ' '}] ${a.task} (${a.assignee || 'Unassigned'})`)
         .join('\n') || 'None recorded'
     }`;
-    navigator.clipboard.writeText(text);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (e) {
+      console.warn('Copy failed:', e);
+    }
   };
 
+  // The Word export endpoint refuses (404) until a report has been explicitly
+  // generated, so the button is disabled with an explanatory tooltip until then.
+  const hasReport = Boolean(session.hearing_report);
+
   const handleDownloadDocx = () => {
+    if (!hasReport) return;
     const url = getDocxExportUrl(session.id);
     const link = document.createElement('a');
     link.href = url;
@@ -323,7 +336,7 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
-          {onOpenReport && (
+          {hasReport && onOpenReport && (
             <button
               onClick={onOpenReport}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#008751] hover:bg-[#007345] active:scale-[0.98] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
@@ -334,13 +347,29 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
               <span className="sm:hidden">Report</span>
             </button>
           )}
+          {!hasReport && onRequestReport && (
+            <button
+              onClick={onRequestReport}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-500 active:scale-[0.98] text-amber-950 text-xs font-bold transition-all shadow-xs cursor-pointer"
+              title="Reports are generated on demand — click to create the Judicial Hearing Report now"
+            >
+              <Scale className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Generate Report</span>
+              <span className="sm:hidden">Report</span>
+            </button>
+          )}
 
           <button
             onClick={handleDownloadDocx}
-            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.98] border border-slate-200/90 text-slate-700 text-xs font-semibold transition-all shadow-xs cursor-pointer"
-            title="Download Word Document (.docx)"
+            disabled={!hasReport}
+            className={`hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-xs ${
+              hasReport
+                ? 'bg-white hover:bg-slate-100 active:scale-[0.98] border-slate-200/90 text-slate-700 cursor-pointer'
+                : 'bg-slate-50 border-slate-200/60 text-slate-400 cursor-not-allowed'
+            }`}
+            title={hasReport ? 'Download Word Document (.docx)' : 'Generate the report first to enable Word export'}
           >
-            <FileDown className="w-3.5 h-3.5 text-[#008751]" />
+            <FileDown className={`w-3.5 h-3.5 ${hasReport ? 'text-[#008751]' : 'text-slate-300'}`} />
             <span>Word</span>
           </button>
 
@@ -435,11 +464,13 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
       </div>
 
       {/* Structured Segmented Tab Switcher */}
-      <div className="px-4 sm:px-6 pt-1 pb-3 flex-shrink-0">
-        <div className="grid grid-cols-3 bg-slate-200/70 p-1 rounded-xl text-xs font-semibold border border-slate-300/40 relative select-none">
+      <div className="px-4 sm:px-6 pt-1 pb-3 flex-shrink-0 sticky top-0 z-10 bg-[#F8FAF9]/95 backdrop-blur">
+        <div role="tablist" aria-label="Record sections" className="grid grid-cols-3 bg-slate-200/70 p-1 rounded-xl text-xs font-semibold border border-slate-300/40 relative select-none">
           <button
+            role="tab"
+            aria-selected={activeTab === 'summary'}
             onClick={() => setActiveTab('summary')}
-            className={`py-2 px-2 rounded-lg text-center transition-all cursor-pointer ${
+            className={`py-2.5 px-2 min-h-[44px] rounded-lg text-center transition-all cursor-pointer ${
               activeTab === 'summary'
                 ? 'bg-white text-slate-900 font-bold shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
                 : 'text-slate-600 hover:text-slate-900 font-medium'
@@ -448,8 +479,10 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
             Summary & Decisions
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'transcript'}
             onClick={() => setActiveTab('transcript')}
-            className={`py-2 px-2 rounded-lg text-center transition-all cursor-pointer ${
+            className={`py-2.5 px-2 min-h-[44px] rounded-lg text-center transition-all cursor-pointer ${
               activeTab === 'transcript'
                 ? 'bg-white text-slate-900 font-bold shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
                 : 'text-slate-600 hover:text-slate-900 font-medium'
@@ -458,8 +491,10 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
             Record & Audio
           </button>
           <button
+            role="tab"
+            aria-selected={activeTab === 'actions'}
             onClick={() => setActiveTab('actions')}
-            className={`py-2 px-2 rounded-lg text-center transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`py-2 px-2 min-h-[44px] rounded-lg text-center transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'actions'
                 ? 'bg-white text-slate-900 font-bold shadow-[0_1px_3px_rgba(0,0,0,0.08)]'
                 : 'text-slate-600 hover:text-slate-900 font-medium'
@@ -635,13 +670,22 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
 
             {/* Bottom Action Buttons (Aligned, Structured, Tactile) */}
             <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
-              {onOpenReport && (
+              {hasReport && onOpenReport && (
                 <button
                   onClick={onOpenReport}
                   className="w-full sm:flex-1 bg-[#008751] hover:bg-[#007345] active:scale-[0.98] text-white py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
                 >
                   <Scale className="w-4 h-4" />
                   <span>Open Full Judicial Hearing Report</span>
+                </button>
+              )}
+              {!hasReport && onRequestReport && (
+                <button
+                  onClick={onRequestReport}
+                  className="w-full sm:flex-1 bg-amber-400 hover:bg-amber-500 active:scale-[0.98] text-amber-950 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <Scale className="w-4 h-4" />
+                  <span>Generate Judicial Hearing Report</span>
                 </button>
               )}
               <button

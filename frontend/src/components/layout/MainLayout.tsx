@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PhoneFrame } from '../phone/PhoneFrame';
 import { ButtonPlate, type AppPage } from './ButtonPlate';
 
@@ -10,8 +10,8 @@ import { HearingReportView } from '../views/HearingReportView';
 import { NewHearingModal } from '../views/NewHearingModal';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
 import type { SessionState, MeetingSummary, CaseInformation, HearingParties } from '../../types/transcription';
-import { updateCaseInfo } from '../../services/api';
-import { Mic, FileText, FileCheck, Scale, Plus, Gavel } from 'lucide-react';
+import { updateCaseInfo, fetchSession, generateHearingReport } from '../../services/api';
+import { Mic, FileText, FileCheck, Scale, Plus, Gavel, AlertTriangle } from 'lucide-react';
 import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
 const LOCAL_STORAGE_KEY = 'jigawa_sharia_court_sessions_v3';
@@ -79,6 +79,8 @@ export const MainLayout: React.FC = () => {
   const [activeCaseInfo, setActiveCaseInfo] = useState<CaseInformation>(DEFAULT_CASE_INFO);
   const [activeParties, setActiveParties] = useState<HearingParties>(DEFAULT_PARTIES);
   const [isNewHearingModalOpen, setIsNewHearingModalOpen] = useState(false);
+  // Guards an in-flight recording/processing session against accidental replacement
+  const [confirmNewHearingWhileActive, setConfirmNewHearingWhileActive] = useState(false);
 
   const navigateTo = (newPage: AppPage, customDir?: 'forward' | 'backward' | 'up' | 'fade') => {
     if (newPage === activePage) return;
@@ -117,6 +119,9 @@ export const MainLayout: React.FC = () => {
   });
   const [selectedSession, setSelectedSession] = useState<SessionState | null>(null);
 
+  // Resolved session for detail/report pages (falls back to the most recent one)
+  const effectiveSession = selectedSession || (sessions.length > 0 ? sessions[0] : null);
+
   // Sync with backend sessions on mount
   useEffect(() => {
     fetch('/api/sessions')
@@ -148,13 +153,19 @@ export const MainLayout: React.FC = () => {
   // When recording status becomes 'recording', navigate to 'live'
   useEffect(() => {
     if (status === 'recording') {
+      savedCompleteRef.current = null;
       navigateTo('live', 'up');
     }
   }, [status]);
 
-  // When post-recording processing finishes, save session and jump to 'report'
+  // When post-recording processing finishes, save the session and STAY on the
+  // Record view. The report is intentionally NOT generated here — the user
+  // decides when to create it via the "Generate Judicial Hearing Report" button
+  // on the Report page. A subtle nudge is shown instead of an auto-jump.
+  const savedCompleteRef = useRef<string | null>(null);
   useEffect(() => {
-    if (status === 'complete') {
+    if (status === 'complete' && sessionId && savedCompleteRef.current !== sessionId) {
+      savedCompleteRef.current = sessionId;
       const now = new Date();
       const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -185,6 +196,7 @@ export const MainLayout: React.FC = () => {
         case_info: activeCaseInfo,
         parties: activeParties,
         speaker_names: {},
+        report_status: 'not_generated',
       };
 
       // Persist case info to backend session
@@ -196,14 +208,19 @@ export const MainLayout: React.FC = () => {
 
       setSessions((prev) => [newSession, ...prev.filter((s) => s.id !== newSession.id)]);
       setSelectedSession(newSession);
-
-      // Brief delay so the user clearly perceives the 100% complete state before switching to report
-      const timer = setTimeout(() => {
-        navigateTo('report', 'forward');
-      }, 750);
-      return () => clearTimeout(timer);
     }
   }, [status, summary, sessionId, recordingSeconds, languageMode, liveTranscript, finalTranscript, activeCaseInfo, activeParties]);
+
+  // Opening the "New Hearing" modal while a session is live must not silently
+  // kill the recording. Route through a confirmation that keeps the mic streaming
+  // until the user explicitly chooses to stop.
+  const handleRequestNewHearing = () => {
+    if (status === 'recording' || status === 'processing') {
+      setConfirmNewHearingWhileActive(true);
+      return;
+    }
+    setIsNewHearingModalOpen(true);
+  };
 
   const handleStartHearingWithCase = (caseInfo: CaseInformation, parties: HearingParties) => {
     setActiveCaseInfo(caseInfo);
@@ -227,19 +244,68 @@ export const MainLayout: React.FC = () => {
     navigateTo('transcript', 'forward');
   };
 
+  // Deep-link from a hearing card straight to its generated report document
+  const handleOpenReportFromCard = (session: SessionState) => {
+    setSelectedSession(session);
+    navigateTo('report', 'forward');
+  };
+
+  // ---- Explicit, user-initiated report generation (never automatic) ----
+  const [reportStatusBySession, setReportStatusBySession] = useState<Record<string, 'not_generated' | 'generating' | 'ready' | 'error'>>({});
+
+  const currentReportStatus = effectiveSession
+    ? reportStatusBySession[effectiveSession.id]
+      ?? (effectiveSession.hearing_report ? 'ready' : 'not_generated')
+    : 'not_generated';
+
+  const refreshSession = async (id: string) => {
+    try {
+      const fresh = await fetchSession(id);
+      setSelectedSession(fresh);
+      setSessions((prev) => {
+        const exists = prev.some((s) => s.id === fresh.id);
+        const next = exists
+          ? prev.map((s) => (s.id === fresh.id ? fresh : s))
+          : [fresh, ...prev];
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    } catch (err) {
+      console.warn('Session refresh failed:', err);
+    }
+  };
+
+  const requestReport = async (id: string) => {
+    if (reportStatusBySession[id] === 'generating') return;
+    setReportStatusBySession((prev) => ({ ...prev, [id]: 'generating' }));
+    try {
+      await generateHearingReport(id);
+      setReportStatusBySession((prev) => ({ ...prev, [id]: 'ready' }));
+      await refreshSession(id);
+    } catch (err) {
+      console.warn('Report generation failed:', err);
+      setReportStatusBySession((prev) => ({ ...prev, [id]: 'error' }));
+      await refreshSession(id);
+    }
+  };
+
 
 
   // Determine theme for current page
   const pageTheme = activePage === 'live' && status === 'recording' ? 'royal' : 'light';
-  const effectiveSession = selectedSession || (sessions.length > 0 ? sessions[0] : null);
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden select-none selection:bg-[#008751]/30 font-sans">
+      <a href="#court-main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:bg-white focus:px-3 focus:py-2 focus:rounded-lg focus:text-xs focus:font-bold">
+        Skip to court content
+      </a>
       {/* Subtle Nigerian National Flag Tricolor Accent Ribbon */}
       <div className="w-full h-1 nigerian-tricolor flex-shrink-0 z-50 no-print" />
 
       {/* Main Responsive App Body */}
-      <main className="flex-1 min-h-0 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
+      <main id="court-main-content" className="flex-1 min-h-0 w-full max-w-full sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl mx-auto flex flex-col overflow-hidden relative bg-[#F8FAF9] sm:border-x sm:border-emerald-900/10 sm:shadow-lg">
         {/* Floating Minimal Judicial Header Bar */}
         {activePage !== 'live' && (
           <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-6 z-40 no-print flex justify-center pointer-events-none">
@@ -263,7 +329,7 @@ export const MainLayout: React.FC = () => {
 
               {/* Center: Active Suit Number Badge */}
               <button
-                onClick={() => setIsNewHearingModalOpen(true)}
+                onClick={() => handleRequestNewHearing()}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-[11px] font-semibold text-slate-800 transition-all cursor-pointer active:scale-95"
                 title="Edit / Configure Case Information"
               >
@@ -291,7 +357,7 @@ export const MainLayout: React.FC = () => {
                 )}
 
                 <button
-                  onClick={() => setIsNewHearingModalOpen(true)}
+                  onClick={() => handleRequestNewHearing()}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
                   title="Configure & Record New Hearing"
                 >
@@ -326,7 +392,8 @@ export const MainLayout: React.FC = () => {
               <MeetingsListView
                 sessions={sessions}
                 onSelectMeeting={handleSelectMeeting}
-                onStartRecord={() => setIsNewHearingModalOpen(true)}
+                onStartRecord={() => handleRequestNewHearing()}
+                onOpenReport={handleOpenReportFromCard}
               />
             )}
 
@@ -361,6 +428,7 @@ export const MainLayout: React.FC = () => {
                   onToggleActionItem={toggleActionItem}
                   onExport={exportSession}
                   onOpenReport={() => navigateTo('report', 'forward')}
+                  onRequestReport={effectiveSession ? () => void requestReport(effectiveSession.id) : undefined}
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
@@ -372,7 +440,7 @@ export const MainLayout: React.FC = () => {
                     Record a hearing or select an existing session from Proceedings to inspect its speaker-diarized transcript and playback.
                   </p>
                   <button
-                    onClick={() => setIsNewHearingModalOpen(true)}
+                    onClick={() => handleRequestNewHearing()}
                     className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Mic className="w-3.5 h-3.5" />
@@ -389,6 +457,9 @@ export const MainLayout: React.FC = () => {
                   session={effectiveSession}
                   onBack={() => navigateTo('transcript', 'backward')}
                   onJumpToTimestamp={() => navigateTo('transcript', 'backward')}
+                  reportStatus={currentReportStatus}
+                  onRequestReport={() => void requestReport(effectiveSession.id)}
+                  onRegenerate={() => void requestReport(effectiveSession.id)}
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
@@ -400,7 +471,7 @@ export const MainLayout: React.FC = () => {
                     Start a hearing recording or select an existing proceeding to synthesize an authoritative 12-section Judicial Hearing Report with PDF & Word export.
                   </p>
                   <button
-                    onClick={() => setIsNewHearingModalOpen(true)}
+                    onClick={() => handleRequestNewHearing()}
                     className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -420,6 +491,7 @@ export const MainLayout: React.FC = () => {
                   onToggleActionItem={toggleActionItem}
                   onExport={exportSession}
                   onOpenReport={() => navigateTo('report', 'forward')}
+                  onRequestReport={effectiveSession ? () => void requestReport(effectiveSession.id) : undefined}
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
@@ -431,7 +503,7 @@ export const MainLayout: React.FC = () => {
                     Once a recording concludes, an executive summary, decisions, and action items will be generated here.
                   </p>
                   <button
-                    onClick={() => setIsNewHearingModalOpen(true)}
+                    onClick={() => handleRequestNewHearing()}
                     className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Mic className="w-3.5 h-3.5" />
@@ -450,7 +522,7 @@ export const MainLayout: React.FC = () => {
                   setSelectedSession(session);
                   navigateTo('transcript', 'forward');
                 }}
-                onStartHearing={() => setIsNewHearingModalOpen(true)}
+                onStartHearing={() => handleRequestNewHearing()}
               />
             )}
           </div>
@@ -461,6 +533,9 @@ export const MainLayout: React.FC = () => {
             onNavigate={(page) => navigateTo(page)}
             hasSession={Boolean(effectiveSession)}
             theme={pageTheme}
+            isRecording={status === 'recording'}
+            isProcessing={status === 'processing'}
+            isGeneratingReport={currentReportStatus === 'generating'}
           />
         </PhoneFrame>
       </main>
@@ -485,6 +560,63 @@ export const MainLayout: React.FC = () => {
           }
         }}
       />
+
+      {/* Confirm: starting a new hearing must never silently kill an active recording */}
+      {confirmNewHearingWhileActive && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 backdrop-blur-sm p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="new-hearing-guard-title"
+        >
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" aria-hidden="true" />
+              </div>
+              <div className="space-y-1">
+                <h3 id="new-hearing-guard-title" className="text-sm font-bold text-slate-900">
+                  {status === 'recording' ? 'A hearing is currently recording' : 'A hearing is still processing'}
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {status === 'recording'
+                    ? 'Starting a new hearing will stop and process the current recording first. The transcript will be saved — but the report will not be generated until you request it.'
+                    : 'The current recording is still being transcribed. You can start a new hearing once processing completes, or return to the live view.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setConfirmNewHearingWhileActive(false);
+                  navigateTo('live', 'up');
+                }}
+                className="flex-1 px-4 py-2.5 min-h-[44px] rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-sm active:scale-95 transition-all cursor-pointer"
+              >
+                {status === 'recording' ? 'Back to Live Recording' : 'View Processing'}
+              </button>
+              {status === 'recording' && (
+                <button
+                  onClick={() => {
+                    setConfirmNewHearingWhileActive(false);
+                    stopSession();
+                    setIsNewHearingModalOpen(true);
+                  }}
+                  className="flex-1 px-4 py-2.5 min-h-[44px] rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 active:scale-95 transition-all cursor-pointer"
+                >
+                  Stop & Start New
+                </button>
+              )}
+              <button
+                onClick={() => setConfirmNewHearingWhileActive(false)}
+                className="px-4 py-2.5 min-h-[44px] rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 text-xs font-semibold active:scale-95 transition-all cursor-pointer"
+              >
+                Continue Current
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

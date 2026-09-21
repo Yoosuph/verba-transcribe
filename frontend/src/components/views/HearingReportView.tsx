@@ -11,6 +11,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  Sparkles,
 } from 'lucide-react';
 import type { SessionState, JudicialHearingReport } from '../../types/transcription';
 import { generateHearingReport, getDocxExportUrl } from '../../services/api';
@@ -20,64 +21,81 @@ interface HearingReportViewProps {
   session: SessionState;
   onBack: () => void;
   onJumpToTimestamp?: (seconds: number) => void;
+  /** Lifecycle driven by the app shell so the dock spinner stays in sync. */
+  reportStatus?: 'not_generated' | 'generating' | 'ready' | 'error';
+  /** Explicit generate action owned by MainLayout (persists beyond this view). */
+  onRequestReport?: () => void;
+  /** Re-generate action for an existing report. */
+  onRegenerate?: () => void;
 }
 
 export const HearingReportView: React.FC<HearingReportViewProps> = ({
   session,
   onBack,
   onJumpToTimestamp: _onJumpToTimestamp,
+  reportStatus,
+  onRequestReport,
+  onRegenerate,
 }) => {
   const [report, setReport] = useState<JudicialHearingReport | null>(
     session.hearing_report || null
   );
-  const [loading, setLoading] = useState<boolean>(!session.hearing_report);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [showAppendix, setShowAppendix] = useState(true);
 
-  // Fetch or generate report on mount
+  // The report is NEVER generated automatically (not on record completion, not on
+  // view). It is only created when the user explicitly clicks "Generate Report"
+  // or regenerates from an existing document.
+  const hasTranscript =
+    (session.final_transcript?.segments?.length ?? 0) > 0 ||
+    session.live_transcript.length > 0;
+
+  // Reset local state when the view is bound to a different session
+  useEffect(() => {
+    setReport(session.hearing_report || null);
+    setError(null);
+    setIsGenerating(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id]);
+
+  // Stay in sync if a fresh report arrives via a background session refresh
   useEffect(() => {
     if (session.hearing_report) {
       setReport(session.hearing_report);
-      setLoading(false);
-      return;
     }
+  }, [session.hearing_report]);
 
-    let isMounted = true;
-    setLoading(true);
-    setError(null);
-
-    generateHearingReport(session.id)
-      .then((data) => {
-        if (isMounted) {
-          setReport(data);
-          setLoading(false);
-        }
-      })
-      .catch((err) => {
-        if (isMounted) {
-          console.warn('Report generation failed, falling back to simulated:', err);
-          setError(err.message || 'Failed to generate report');
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [session.id, session.hearing_report]);
-
-  const handleRefresh = async () => {
-    setLoading(true);
+  const generateReport = async (): Promise<void> => {
+    if (isGenerating || !hasTranscript) return;
+    setIsGenerating(true);
     setError(null);
     try {
       const data = await generateHearingReport(session.id);
       setReport(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to regenerate report');
+      setError(err.message || 'Failed to generate report');
     } finally {
-      setLoading(false);
+      setIsGenerating(false);
     }
+  };
+
+  const handleRefresh = () => {
+    // Prefer the shell-owned action so the dock-level generating state stays in sync
+    if (onRegenerate) {
+      onRegenerate();
+      return;
+    }
+    void generateReport();
+  };
+
+  const handleGenerateClick = () => {
+    if (onRequestReport) {
+      onRequestReport();
+      return;
+    }
+    void generateReport();
   };
 
   const handlePrint = () => {
@@ -94,7 +112,7 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
     document.body.removeChild(link);
   };
 
-  const handleCopyMarkdown = () => {
+  const handleCopyMarkdown = async () => {
     if (!report) return;
     const lines: string[] = [];
     lines.push('بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ');
@@ -124,52 +142,98 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
     lines.push(`\n### 3. ADJOURNMENT (TA'JIL)`);
     lines.push(`Adjourned to ${report.next_hearing.date} at ${report.next_hearing.time} for ${report.next_hearing.purpose}`);
 
-    navigator.clipboard.writeText(lines.join('\n'));
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (e) {
+      console.warn('Copy failed:', e);
+    }
   };
 
-  if (loading) {
+  if (isGenerating || reportStatus === 'generating') {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F8FAF9] text-center space-y-4">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-[#008751] shadow-md animate-pulse">
-          <Scale className="w-8 h-8" />
+      <div className="flex-1 flex flex-col p-4 sm:p-6 bg-[#F8FAF9] space-y-3 overflow-hidden" role="status" aria-label="Generating judicial report">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <RefreshCw className="w-3.5 h-3.5 text-[#008751] animate-spin" aria-hidden="true" />
+          <span>Generating Judicial Hearing Report — structuring the 12 sections from the record</span>
         </div>
-        <div>
-          <h3 className="text-base font-bold text-slate-900">
-            Synthesizing Judicial Hearing Report...
-          </h3>
-          <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">
-            Extracting proceedings narrative, legal submissions, witness evidence, and court orders directly from the transcribed record.
-          </p>
-        </div>
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs text-slate-600 shadow-xs">
-          <RefreshCw className="w-3.5 h-3.5 text-[#008751] animate-spin" />
-          <span>Structuring 12 judicial report sections</span>
-        </div>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-5 space-y-2 animate-pulse" aria-hidden="true">
+            <div className="h-3 w-2/5 bg-slate-100 rounded" />
+            <div className="h-2.5 w-full bg-slate-100 rounded" />
+            <div className="h-2.5 w-11/12 bg-slate-100 rounded" />
+            <div className="h-2.5 w-4/5 bg-slate-100 rounded" />
+          </div>
+        ))}
+        <p className="text-[11px] text-slate-500 text-center">Extracting narrative, submissions, evidence, and orders from the record.</p>
       </div>
     );
   }
 
   if (error && !report) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F8FAF9] text-center space-y-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F8FAF9] text-center space-y-4" role="alert">
         <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center text-rose-600 border border-rose-200">
           <AlertCircle className="w-7 h-7" />
         </div>
         <h3 className="text-base font-bold text-slate-900">Report Generation Error</h3>
         <p className="text-xs text-slate-500 max-w-sm">{error}</p>
-        <button
-          onClick={handleRefresh}
-          className="px-4 py-2 bg-[#008751] hover:bg-[#007043] text-white rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all"
-        >
-          Retry Analysis
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="px-4 py-2.5 min-h-[44px] bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-all cursor-pointer"
+          >
+            Back to Record
+          </button>
+          <button
+            onClick={handleGenerateClick}
+            className="px-4 py-2.5 min-h-[44px] bg-[#008751] hover:bg-[#007043] text-white rounded-xl text-xs font-semibold shadow-md active:scale-95 transition-all cursor-pointer"
+          >
+            Retry Analysis
+          </button>
+        </div>
       </div>
     );
   }
 
-  if (!report) return null;
+  // Explicit, user-initiated entry point: no report has been generated yet.
+  if (!report) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F8FAF9] text-center space-y-5">
+        <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+          <Scale className="w-8 h-8 text-[#008751]" aria-hidden="true" />
+        </div>
+        <div className="space-y-1.5 max-w-sm">
+          <h3 className="text-base font-bold text-slate-900">No Report Generated Yet</h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            {hasTranscript
+              ? 'The Judicial Hearing Report is created on demand — nothing is auto-generated. Click below when you are ready to structure the full hearing record into the certified 12-section format.'
+              : 'There is no transcript for this session yet. Record or upload the hearing audio first, then return here to generate the report.'}
+          </p>
+        </div>
+        {hasTranscript ? (
+          <button
+            onClick={handleGenerateClick}
+            className="px-6 py-3 min-h-[48px] bg-[#008751] hover:bg-[#007043] text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-700/20 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
+            <span>Generate Judicial Hearing Report</span>
+          </button>
+        ) : (
+          <button
+            onClick={onBack}
+            className="px-4 py-2.5 min-h-[44px] bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-sm active:scale-95 transition-all cursor-pointer"
+          >
+            Back to Record
+          </button>
+        )}
+        {error && (
+          <p className="text-[11px] text-rose-600 max-w-xs" role="alert">{error}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-[#EAEEEC] text-slate-900 overflow-hidden relative print:bg-white print:overflow-visible">
@@ -202,6 +266,15 @@ export const HearingReportView: React.FC<HearingReportViewProps> = ({
           >
             {copySuccess ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
             <span>{copySuccess ? 'Copied' : 'Copy'}</span>
+          </button>
+
+          <button
+            onClick={onRegenerate ?? (() => void handleRefresh())}
+            className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 active:scale-[0.98] text-slate-700 text-xs font-semibold transition-all items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Re-generate the report from the full hearing record"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+            <span>Regenerate</span>
           </button>
 
           <button

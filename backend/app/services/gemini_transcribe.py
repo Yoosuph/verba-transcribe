@@ -23,8 +23,9 @@ Instructions:
 class GeminiFinalTranscriber:
     """Performs post-recording audio transcription with speaker diarization and timestamps."""
 
-    def __init__(self):
-        self._api_key = settings.gemini_api_key
+    @property
+    def _api_key(self) -> str:
+        return settings.gemini_api_key
 
     async def transcribe_audio(
         self,
@@ -46,78 +47,81 @@ class GeminiFinalTranscriber:
         client = genai.Client(api_key=self._api_key)
         audio_part = types.Part.from_bytes(data=wav_bytes, mime_type="audio/wav")
 
-        # Build prompt using the verified live transcript for maximum fidelity
+        # Dedicated transcription model produces the raw verbatim text;
+        # the capable summary model structures it into diarized JSON segments.
+        raw_models = [settings.gemini_final_model] + settings.gemini_final_fallback_models
+        structure_models = [settings.gemini_summary_model] + settings.gemini_summary_fallback_models
+
         if live_transcript_text and live_transcript_text.strip():
             logger.info(f"Injecting verified live transcript ({len(live_transcript_text)} chars) to guide speaker diarization.")
-            prompt = (
-                f"{FINAL_TRANSCRIBE_SYSTEM_PROMPT}\n\n"
-                f"=== VERIFIED REAL-TIME LIVE TRANSCRIPT ===\n"
-                f"{live_transcript_text.strip()}\n"
-                f"=== END LIVE TRANSCRIPT ===\n\n"
-                f"Task:\n"
-                f"1. Align the verbatim words above with the accompanying audio recording.\n"
+            alignment_instructions = (
+                f"1. Align the verbatim words in the VERIFIED REAL-TIME LIVE TRANSCRIPT below with the accompanying audio recording.\n"
                 f"2. Separate utterances by speaker ('Speaker 1', 'Speaker 2', etc.).\n"
                 f"3. Assign start and end timestamps in seconds for each segment.\n"
                 f"4. Detect language per segment ('ha-NG', 'en-US', or 'mixed').\n"
-                f"5. Return valid JSON adhering to the FinalTranscriptData schema."
+                f"5. Return valid JSON adhering to the FinalTranscriptData schema.\n\n"
+                f"=== VERIFIED REAL-TIME LIVE TRANSCRIPT ===\n"
+                f"{live_transcript_text.strip()}\n"
+                f"=== END LIVE TRANSCRIPT ==="
             )
-            # When live transcript is provided, multimodal models with JSON schema excel at alignment
-            models_to_try = [settings.gemini_summary_model, "gemini-3.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
         else:
-            prompt = (
-                f"{FINAL_TRANSCRIBE_SYSTEM_PROMPT}\n\n"
-                f"Please transcribe this audio recording with speaker diarization and timestamps. "
-                f"Language mode preferred: {language_mode}. Return valid JSON conforming to the schema."
+            alignment_instructions = (
+                f"1. Transcribe the spoken words in the accompanying audio recording accurately.\n"
+                f"2. Separate utterances by speaker ('Speaker 1', 'Speaker 2', etc.).\n"
+                f"3. Assign start and end timestamps in seconds for each segment.\n"
+                f"4. Detect language per segment ('ha-NG', 'en-US', or 'mixed').\n"
+                f"5. Language mode preferred: {language_mode}.\n"
+                f"6. Return valid JSON adhering to the FinalTranscriptData schema."
             )
-            models_to_try = [settings.gemini_final_model] + settings.gemini_final_fallback_models
 
-        for model_name in models_to_try:
+        structure_prompt = (
+            f"{FINAL_TRANSCRIBE_SYSTEM_PROMPT}\n\n"
+            f"{alignment_instructions}"
+        )
+
+        # Pass 1: raw verbatim text from the dedicated transcription model (if any)
+        raw_text: Optional[str] = None
+        for model_name in raw_models:
             try:
-                logger.info(f"Attempting speaker diarization with model: {model_name}")
+                logger.info(f"Attempting raw transcription with model: {model_name}")
+                transcribe_resp = await client.aio.models.generate_content(
+                    model=model_name,
+                    contents=[audio_part, "Transcribe the spoken words in this audio accurately, including speaker labels if distinguishable."]
+                )
+                if transcribe_resp and transcribe_resp.text and transcribe_resp.text.strip():
+                    raw_text = transcribe_resp.text.strip()
+                    break
+            except Exception as e:
+                logger.warning(f"Raw transcription failed with model {model_name}: {e}")
 
-                if "3.5-transcribe" in model_name:
-                    # Specialized transcribe model: does not take system_instruction or JSON mode
-                    transcribe_resp = await client.aio.models.generate_content(
-                        model=model_name,
-                        contents=[audio_part, "Transcribe the spoken words in this audio accurately."]
+        # Pass 2: structure into diarized JSON segments with the capable model
+        for model_name in structure_models:
+            try:
+                logger.info(f"Structuring diarized transcript with model: {model_name}")
+                prompt = structure_prompt
+                if raw_text:
+                    prompt += (
+                        f"\n\n=== RAW AUDIO TRANSCRIPTION (ground truth for wording) ===\n"
+                        f"{raw_text}\n"
+                        f"=== END RAW TRANSCRIPTION ==="
                     )
-                    raw_text = transcribe_resp.text or live_transcript_text or ""
-                    structure_prompt = (
-                        f"{FINAL_TRANSCRIBE_SYSTEM_PROMPT}\n"
-                        f"Speech transcript: {raw_text}\n"
-                        f"Align into speaker-diarized segments with timestamps and return JSON."
-                    )
-                    structured_resp = await client.aio.models.generate_content(
-                        model=settings.gemini_summary_model,
-                        contents=[audio_part, structure_prompt],
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=FinalTranscriptData,
-                            temperature=0.1
-                        )
-                    )
-                    if structured_resp and structured_resp.text:
-                        parsed = json.loads(structured_resp.text)
-                        return FinalTranscriptData(**parsed)
-                else:
-                    config = types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=FinalTranscriptData,
-                        temperature=0.1
-                    )
-                    response = await client.aio.models.generate_content(
-                        model=model_name,
-                        contents=[audio_part, prompt],
-                        config=config
-                    )
-                    if response and response.text:
-                        parsed_data = json.loads(response.text)
-                        return FinalTranscriptData(**parsed_data)
-
+                config = types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=FinalTranscriptData,
+                    temperature=0.1
+                )
+                response = await client.aio.models.generate_content(
+                    model=model_name,
+                    contents=[audio_part, prompt],
+                    config=config
+                )
+                if response and response.text:
+                    parsed_data = json.loads(response.text)
+                    return FinalTranscriptData(**parsed_data)
             except Exception as e:
                 logger.warning(f"Final transcription failed with model {model_name}: {e}")
 
-        if settings.mock_mode_if_no_key or (live_transcript_text and live_transcript_text.strip()):
+        if settings.mock_mode_if_no_key and not self._api_key:
             logger.info("Using segmented live transcript fallback for diarization.")
             return self._generate_simulated_final_transcript(language_mode, live_transcript_text)
 

@@ -4,6 +4,7 @@ import {
   FileText,
   Gavel,
   Scale,
+  Loader2,
 } from 'lucide-react';
 
 export type AppPage = 'meetings' | 'live' | 'transcript' | 'summary' | 'actions' | 'report';
@@ -14,6 +15,9 @@ interface ButtonPlateProps {
   hasSession: boolean;
   actionCount?: number;
   theme?: 'light' | 'royal';
+  isRecording?: boolean;
+  isProcessing?: boolean;
+  isGeneratingReport?: boolean;
 }
 
 export const ButtonPlate: React.FC<ButtonPlateProps> = ({
@@ -21,6 +25,9 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
   onNavigate,
   hasSession,
   theme = 'light',
+  isRecording = false,
+  isProcessing = false,
+  isGeneratingReport = false,
 }) => {
   const isRoyal = theme === 'royal';
 
@@ -37,7 +44,18 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
 
   return (
     <div className="w-full px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 z-50 flex-shrink-0 select-none no-print">
+      {(isRecording || isProcessing) && activePage !== 'live' && (
+        <button
+          onClick={() => onNavigate('live')}
+          aria-label={isRecording ? 'Return to live recording' : 'View processing status'}
+          className="w-full mb-2 px-3 py-2.5 rounded-2xl bg-[#042A1D] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] transition-all cursor-pointer"
+        >
+          <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-amber-400 animate-pulse'}`} aria-hidden="true" />
+          <span>{isRecording ? 'Recording in progress — tap to return' : 'Finalizing proceeding — tap to view'}</span>
+        </button>
+      )}
       <nav
+        aria-label="Primary"
         className={`w-full rounded-2xl p-1.5 grid grid-cols-4 gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.07)] transition-all duration-300 relative ${
           isRoyal
             ? 'bg-[#042A1D]/90 backdrop-blur-xl border border-emerald-500/30 text-white'
@@ -63,7 +81,9 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
         {/* 1. Cause Docket / Hearings */}
         <button
           onClick={() => onNavigate('meetings')}
-          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 ${
+          aria-current={activePage === 'meetings' ? 'page' : undefined}
+          aria-label="Hearings cause docket"
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 min-h-[52px] focus-visible:outline-2 ${
             activePage === 'meetings'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
@@ -88,7 +108,9 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
         <button
           onClick={() => onNavigate('transcript')}
           disabled={!hasSession}
-          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${
+          aria-current={activePage === 'transcript' || activePage === 'summary' ? 'page' : undefined}
+          aria-label="Court record and audio"
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 min-h-[52px] ${
             !hasSession
               ? 'opacity-30 cursor-not-allowed'
               : 'cursor-pointer active:scale-95'
@@ -117,7 +139,9 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
         <button
           onClick={() => onNavigate('report')}
           disabled={!hasSession}
-          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${
+          aria-current={activePage === 'report' ? 'page' : undefined}
+          aria-label={isGeneratingReport ? 'Judicial hearing report (generating)' : 'Judicial hearing report'}
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 min-h-[52px] ${
             !hasSession
               ? 'opacity-30 cursor-not-allowed'
               : 'cursor-pointer active:scale-95'
@@ -132,11 +156,19 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           }`}
           title="Judicial Hearing Report & PDF / Word Export"
         >
-          <Scale
-            className={`w-4 h-4 transition-transform duration-200 ${
-              activePage === 'report' ? 'scale-110' : 'scale-100'
-            }`}
-          />
+          <span className="relative inline-flex">
+            <Scale
+              className={`w-4 h-4 transition-transform duration-200 ${
+                activePage === 'report' ? 'scale-110' : 'scale-100'
+              }`}
+            />
+            {isGeneratingReport && (
+              <Loader2
+                className="w-3 h-3 text-[#008751] animate-spin absolute -top-1.5 -right-2 bg-white rounded-full shadow-sm"
+                aria-hidden="true"
+              />
+            )}
+          </span>
           <span className="text-[11px] mt-1 tracking-tight font-semibold truncate">
             Report
           </span>
@@ -145,7 +177,9 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
         {/* 4. Court Orders & Decrees */}
         <button
           onClick={() => onNavigate('actions')}
-          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 ${
+          aria-current={activePage === 'actions' ? 'page' : undefined}
+          aria-label="Court orders and decrees"
+          className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 cursor-pointer active:scale-95 min-h-[52px] ${
             activePage === 'actions'
               ? isRoyal
                 ? 'text-[#008751] font-bold'

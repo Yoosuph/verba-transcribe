@@ -7,18 +7,22 @@ interface MeetingsListViewProps {
   sessions: SessionState[];
   onSelectMeeting: (session: SessionState) => void;
   onStartRecord: () => void;
+  /** Shown on cards with a generated report; jumps straight to the report document. */
+  onOpenReport?: (session: SessionState) => void;
 }
 
 export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
   sessions,
   onSelectMeeting,
   onStartRecord,
+  onOpenReport,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterChip, setFilterChip] = useState<'all' | 'today' | 'mirath' | 'orders'>('all');
 
   // Filter meetings based on search & filter chip
-  const filteredSessions = sessions.filter((s) => {
+  const filteredSessions = sessions
+    .filter((s) => {
     const q = searchQuery.toLowerCase().trim();
     const caseNum = (s.case_info?.case_number || '').toLowerCase();
     const court = (s.case_info?.court || '').toLowerCase();
@@ -52,7 +56,10 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
       return (s.hearing_report?.orders?.length || 0) > 0 || (s.summary?.decisions?.length || 0) > 0;
     }
     return true;
-  });
+  })
+  .sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
+
+  const hasActiveFilters = searchQuery.trim() !== '' || filterChip !== 'all';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-[#F8FAF9] text-slate-900 overflow-hidden relative">
@@ -93,13 +100,16 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
           {/* Search Bar */}
           <div className="relative">
             <div className="w-full bg-slate-50 border border-slate-200/80 hover:border-slate-300 focus-within:border-[#008751] focus-within:ring-2 focus-within:ring-[#008751]/20 rounded-xl px-3.5 py-2 flex items-center gap-2.5 transition-all">
-              <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <Search className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
+              <label htmlFor="hearing-search" className="sr-only">Search proceedings</label>
               <input
-                type="text"
+                id="hearing-search"
+                type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search suit number, parties, counsel, or cause..."
-                className="bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none w-full font-medium"
+                aria-label="Search suit number, parties, counsel, or cause"
+                className="bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none w-full font-medium min-h-[32px]"
               />
               {searchQuery && (
                 <button
@@ -114,10 +124,11 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
           </div>
 
           {/* Filter Chips Horizontal Row */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[11px] font-semibold">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[11px] font-semibold" role="group" aria-label="Filter proceedings">
             <button
               onClick={() => setFilterChip('all')}
-              className={`px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
+              aria-pressed={filterChip === 'all'}
+              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
                 filterChip === 'all'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -127,7 +138,8 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
             </button>
             <button
               onClick={() => setFilterChip('today')}
-              className={`px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
+              aria-pressed={filterChip === 'today'}
+              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
                 filterChip === 'today'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -137,7 +149,8 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
             </button>
             <button
               onClick={() => setFilterChip('mirath')}
-              className={`px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
+              aria-pressed={filterChip === 'mirath'}
+              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
                 filterChip === 'mirath'
                   ? 'bg-[#008751] text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -147,7 +160,8 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
             </button>
             <button
               onClick={() => setFilterChip('orders')}
-              className={`px-3 py-1 rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
+              aria-pressed={filterChip === 'orders'}
+              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
                 filterChip === 'orders'
                   ? 'bg-amber-800 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
@@ -159,6 +173,19 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
         </div>
 
         {/* Docket Section List */}
+        <div className="flex items-center justify-between" aria-live="polite">
+          <p className="text-[11px] font-semibold text-slate-500">
+            {filteredSessions.length} of {sessions.length} proceedings
+          </p>
+          {hasActiveFilters && (
+            <button
+              onClick={() => { setSearchQuery(''); setFilterChip('all'); }}
+              className="text-[11px] font-bold text-[#008751] hover:underline underline-offset-2 min-h-[32px] px-2 cursor-pointer"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
         {filteredSessions.length === 0 ? (
           <div className="py-14 px-4 bg-white rounded-2xl border border-slate-200/80 flex flex-col items-center justify-center text-center space-y-4">
             <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-[#008751] flex items-center justify-center shadow-xs">
@@ -204,7 +231,11 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                 <article
                   key={session.id}
                   onClick={() => onSelectMeeting(session)}
-                  className="group bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-[#008751]/60 transition-all duration-150 cursor-pointer space-y-3 touch-press"
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectMeeting(session); } }}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Open record ${suitNo}, ${claimantName} versus ${defendantName}`}
+                  className="group bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-[#008751]/60 transition-all duration-150 cursor-pointer space-y-3 touch-press focus-visible:outline-2"
                 >
                   {/* Card Header: Suit Number & Division Tag */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2.5 border-b border-slate-100">
@@ -281,6 +312,21 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                           <Gavel className="w-2.5 h-2.5" />
                           <span>{orderCount} {orderCount === 1 ? 'Order' : 'Orders'}</span>
                         </span>
+                      )}
+
+                      {onOpenReport && session.hearing_report && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenReport(session);
+                          }}
+                          className="px-2.5 py-0.5 rounded-full bg-[#042A1D] text-white text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+                          title="Open the generated Judicial Hearing Report"
+                          aria-label={`Open Judicial Hearing Report for ${suitNo}`}
+                        >
+                          <Scale className="w-2.5 h-2.5" aria-hidden="true" />
+                          <span>Report</span>
+                        </button>
                       )}
 
                       <span className="inline-flex items-center gap-0.5 text-xs font-bold text-[#008751] group-hover:translate-x-0.5 transition-transform">

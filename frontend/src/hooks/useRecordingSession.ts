@@ -38,6 +38,11 @@ export function useRecordingSession() {
   } = useAudioRecorder();
   const socketRef = useRef<TranscriptionSocket | null>(null);
   const timerRef = useRef<number | null>(null);
+  const processingTimeoutRef = useRef<number | null>(null);
+  const statusRef = useRef<SessionStatus>('idle');
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   // Synchronize recorder errors
   useEffect(() => {
@@ -116,16 +121,24 @@ export function useRecordingSession() {
           setSummary(data);
         },
         onComplete: () => {
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
           setStatus('complete');
           setProcessingStage(null);
         },
         onError: (code, message) => {
           console.error(`Transcription socket error [${code}]:`, message);
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
           setErrorMessage(message);
           setStatus('error');
         },
         onClose: () => {
-          if (status === 'recording') {
+          if (statusRef.current === 'recording') {
             setStatus('error');
             setErrorMessage('WebSocket connection lost unexpectedly.');
           }
@@ -144,24 +157,33 @@ export function useRecordingSession() {
     } catch (err: any) {
       setStatus('error');
       setErrorMessage(err.message || 'Failed to start session');
-      if (socketRef.current) {
-        socketRef.current.close();
-        socketRef.current = null;
-      }
+      try {
+        socketRef.current?.close();
+      } catch {}
+      socketRef.current = null;
       stopRecording();
     }
-  }, [startRecording, stopRecording, status]);
+  }, [startRecording, stopRecording]);
 
   const stopSession = useCallback(async () => {
-    if (status !== 'recording') return;
+    if (statusRef.current !== 'recording' && statusRef.current !== 'connecting') return;
 
     setStatus('processing');
     setProcessingStage('final_transcription');
 
+    // Safety: if backend never replies, don't trap the user forever.
+    if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+    processingTimeoutRef.current = window.setTimeout(() => {
+      if (statusRef.current === 'processing') {
+        setErrorMessage('Timed out waiting for transcription. Please try again.');
+        setStatus('error');
+      }
+    }, 120000);
+
     // 1. Stop audio recording
     await stopRecording();
 
-    // 2. Notify backend of stop
+    // 2. Notify backend of stop (queued if socket still connecting)
     if (socketRef.current) {
       socketRef.current.sendJson({ type: 'stop' });
     }
@@ -209,11 +231,12 @@ export function useRecordingSession() {
 
     // Also persist via REST
     try {
-      await fetch(`/api/sessions/${sessionId}/speakers/rename`, {
+      const res = await fetch(`/api/sessions/${sessionId}/speakers/rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_name: oldName, new_name: newName }),
       });
+      if (!res.ok) console.warn('Failed persisting renamed speaker via REST:', res.status);
     } catch (e) {
       console.warn("Failed persisting renamed speaker via REST:", e);
     }
@@ -231,11 +254,12 @@ export function useRecordingSession() {
     });
 
     try {
-      await fetch(`/api/sessions/${sessionId}/actions/${actionId}`, {
+      const res = await fetch(`/api/sessions/${sessionId}/actions/${actionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed }),
       });
+      if (!res.ok) console.warn('Failed toggling action item via REST:', res.status);
     } catch (e) {
       console.warn("Failed toggling action item via REST:", e);
     }
@@ -259,10 +283,28 @@ export function useRecordingSession() {
     }, 3000);
   }, []);
 
-  const exportSession = useCallback(async (format: 'markdown' | 'txt' | 'json') => {
+  const exportSession = useCallback(async (format: 'markdown' | 'txt' | 'json' | 'docx') => {
     if (!sessionId) return;
-    const url = `/api/sessions/${sessionId}/export?format=${format}`;
-    window.open(url, '_blank');
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/export?format=${format}`);
+      if (!res.ok) {
+        setErrorMessage('Export failed. Please try again.');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = format === 'markdown' ? 'md' : format;
+      a.download = `hearing_${sessionId}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn('Export failed:', e);
+      setErrorMessage('Export failed. Please try again.');
+    }
   }, [sessionId]);
 
   return {

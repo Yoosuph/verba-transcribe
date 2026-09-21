@@ -1,11 +1,12 @@
 import io
+import logging
 import os
-import struct
 import wave
-import uuid
 import aiofiles
 from typing import Optional
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 class AudioAccumulator:
     """
@@ -19,12 +20,22 @@ class AudioAccumulator:
         self.num_channels = 1
         self.sample_width = 2  # 16-bit = 2 bytes
         self.file_path: Optional[str] = None
+        self.overflowed: bool = False
+        self.max_bytes = settings.max_audio_size_mb * 1024 * 1024
         os.makedirs(settings.temp_audio_dir, exist_ok=True)
 
     def append_pcm(self, chunk: bytes) -> None:
-        """Appends raw 16-bit mono PCM bytes."""
-        if chunk:
-            self._pcm_buffer.extend(chunk)
+        """Appends raw 16-bit mono PCM bytes, enforcing the configured size cap."""
+        if not chunk:
+            return
+        if len(self._pcm_buffer) + len(chunk) > self.max_bytes:
+            self.overflowed = True
+            logger.warning(
+                "[%s] Audio accumulator reached %.0fMB cap; dropping chunk.",
+                self.session_id, self.max_bytes / (1024 * 1024),
+            )
+            return
+        self._pcm_buffer.extend(chunk)
 
     @property
     def total_bytes(self) -> int:
@@ -34,6 +45,11 @@ class AudioAccumulator:
     def duration_seconds(self) -> float:
         bytes_per_second = self.sample_rate * self.num_channels * self.sample_width
         return len(self._pcm_buffer) / float(bytes_per_second) if bytes_per_second else 0.0
+
+    @property
+    def duration_limit_seconds(self) -> int:
+        """Maximum allowed recording duration in seconds from config."""
+        return settings.max_session_minutes * 60
 
     def get_wav_bytes(self) -> bytes:
         """Encodes accumulated PCM data into standard RIFF WAV bytes."""
@@ -61,3 +77,4 @@ class AudioAccumulator:
     async def cleanup(self) -> None:
         """Frees in-memory buffer while retaining saved audio on disk for replay."""
         self._pcm_buffer.clear()
+        self.overflowed = False

@@ -137,10 +137,12 @@ class SessionState(BaseModel):
     detected_language: Optional[str] = None
     live_transcript: List[LiveTranscriptItem] = Field(default_factory=list)
     final_transcript: Optional[FinalTranscriptData] = None
+    translated_transcript: Optional[FinalTranscriptData] = None
     summary: Optional[MeetingSummary] = None
     case_info: Optional[CaseInformation] = None
     parties: Optional[HearingParties] = None
     hearing_report: Optional[JudicialHearingReport] = None
+    report_status: Literal["not_generated", "generating", "ready", "error"] = "not_generated"
     speaker_names: Dict[str, str] = Field(default_factory=dict)
     has_audio: bool = False
     audio_url: Optional[str] = None

@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from app.config import settings
 from app.api.sessions import router as sessions_router
 from app.websocket.transcription import router as websocket_router
@@ -21,10 +21,14 @@ app = FastAPI(
 )
 
 # CORS configuration
+# Browsers reject `Access-Control-Allow-Origin: *` when credentials are allowed,
+# so disable credentials for wildcard origins.
+_cors_origins = settings.cors_origins if isinstance(settings.cors_origins, list) else ["*"]
+_allow_credentials = "*" not in _cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins if isinstance(settings.cors_origins, list) else ["*"],
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -64,12 +68,14 @@ if frontend_dist and os.path.exists(frontend_dist):
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("openapi.json"):
-            return {"error": "Not Found"}
-        file_path = os.path.join(frontend_dist, full_path)
-        if full_path and os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
+        if full_path.startswith("api") or full_path.startswith("docs") or full_path.startswith("openapi.json") or full_path.startswith("ws"):
+            return JSONResponse(status_code=404, content={"error": "Not Found"})
+        dist_root = os.path.realpath(frontend_dist)
+        candidate = os.path.realpath(os.path.join(dist_root, full_path))
+        # Block path traversal: only serve files that resolve inside the dist directory
+        if full_path and os.path.isfile(candidate) and candidate.startswith(dist_root + os.sep):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(dist_root, "index.html"))
 else:
     @app.get("/")
     async def root():
@@ -81,4 +87,4 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

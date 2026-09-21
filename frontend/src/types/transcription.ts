@@ -152,6 +152,7 @@ export interface SessionData {
   case_info?: CaseInformation;
   parties?: HearingParties;
   hearing_report?: JudicialHearingReport;
+  report_status?: 'not_generated' | 'generating' | 'ready' | 'error';
   speaker_names: Record<string, string>;
   has_audio?: boolean;
   audio_url?: string;
@@ -170,9 +171,13 @@ export type InboundWSMessage =
   | { type: 'final_transcript'; session_id: string; data: FinalTranscriptData }
   | { type: 'summary'; session_id: string; data: MeetingSummary }
   | { type: 'complete'; session_id: string }
+  | { type: 'session_limit'; session_id: string; code: string; message: string }
+  | { type: 'ping' }
+  | { type: 'pong' }
   | { type: 'error'; code: string; message: string };
 
 export type OutboundWSMessage =
   | { type: 'start'; session_id: string; language_mode: LanguageMode }
   | { type: 'stop' }
+  | { type: 'ping' }
   | { type: 'rename_speaker'; old_name: string; new_name: string };
