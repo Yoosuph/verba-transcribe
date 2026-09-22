@@ -20,10 +20,29 @@ class Settings(BaseSettings):
     gemini_live_fallback_models: List[str] = ["gemini-3.8-live"]
     # Final path: dedicated non-streaming transcription model (native diarization, up to 8 speakers)
     gemini_final_model: str = "gemini-3.5-transcribe"
-    gemini_final_fallback_models: List[str] = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-flash-latest"]
-    # Summary / judicial report: most capable audio-capable model receives the FULL recording + transcript
-    gemini_summary_model: str = "gemini-3.8-flash"
-    gemini_summary_fallback_models: List[str] = ["gemini-3.5-flash", "gemini-flash-latest"]
+    gemini_final_fallback_models: List[str] = [
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-2.5-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+    ]
+    # Summary / Q&A: smartest model first (Pro when its daily free-tier quota
+    # is available), then per-model flash rotations. Free-tier quotas are
+    # per-model (≈20/day) — an exhausted model must fail fast so the chain
+    # reaches one that still has quota (currently gemini-3.6-flash / 2.5-flash).
+    gemini_summary_model: str = "gemini-pro-latest"
+    gemini_summary_fallback_models: List[str] = [
+        "gemini-3.1-pro-preview",
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-2.5-flash",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-flash-latest",
+    ]
     cors_origins: Union[List[str], str] = ["*"]
     max_session_minutes: int = 30
     max_audio_size_mb: int = 100

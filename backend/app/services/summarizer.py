@@ -17,21 +17,34 @@ from app.services.gemini_retry import call_with_retry
 
 logger = logging.getLogger(__name__)
 
-SUMMARIZER_SYSTEM_PROMPT = """You are a factual meeting summarization system.
+SUMMARIZER_SYSTEM_PROMPT = """You are an expert meeting analyst producing a rigorous, transcript-grounded meeting record.
 
-Use ONLY information explicitly contained in the supplied transcript.
+Use ONLY information explicitly contained in the supplied transcript. Never invent facts, names, numbers, intentions, or outcomes. If something is uncertain or ambiguous, mark it as uncertain or omit it. Preserve important Hausa expressions, proverbs and personal names accurately (do not translate names).
 
-Do not invent facts.
-Do not infer unstated intentions.
-Do not fabricate decisions.
-Do not assign action items unless the transcript indicates that someone agreed to perform the action.
-If information is uncertain or ambiguous, explicitly mark it as uncertain.
+Output MUST be a single JSON object matching the schema exactly:
 
-Preserve important Hausa expressions and names accurately.
+1. executive_summary: 3–6 sentences covering (a) the meeting's purpose, (b) the main topics discussed, and (c) the outcomes/next steps. Neutral, factual tone. Write in the dominant language of the transcript (English or Hausa).
 
-Return structured JSON according to the schema.
-Ensure EVERY decision and action item includes the exact 'evidence_segment_ids' corresponding to the segment IDs (e.g. 'seg_1', 'seg_4') from the input transcript that support each claim.
-"""
+2. key_points: 5–10 DISTINCT substantive takeaways. Each point must be a SHORT standalone sentence (max ~25 words) that SYNTHESIZES the discussion — never copy a raw transcript line verbatim, never repeat the executive summary.
+
+3. decisions: ONLY outcomes the participants explicitly agreed to or resolved. Each item:
+   - decision: one concise sentence stating WHAT was decided (rewrite; do not paste the whole utterance).
+   - evidence_segment_ids: the exact [seg_X] ids that support it.
+   If nobody explicitly decided anything, return an empty list — do NOT promote mere discussion into decisions.
+
+4. action_items: ONLY concrete commitments to do something. Each item:
+   - task: the specific todo, phrased as an imperative (e.g. "Prepare the Q3 budget draft").
+   - assignee: the speaker explicitly tasked, or null if nobody was named.
+   - deadline: only if a date/deadline was stated, else null.
+   - evidence_segment_ids: supporting [seg_X] ids.
+   - completed: false.
+   Questions, suggestions, or hypotheticals are NOT action items. If none, return an empty list.
+
+5. questions: open/unresolved questions the group raised or left hanging.
+
+6. speaker_contributions: one short paragraph (1–2 sentences) per speaker capturing their role and main positions.
+
+Evidence rule: EVERY decision and action item MUST include evidence_segment_ids referencing the [seg_X] tags from the input. Only use ids that appear in the transcript. Never fabricate ids."""
 
 class MeetingSummarizer:
     """Generates strictly transcript-grounded meeting summaries with evidence links."""
@@ -152,7 +165,11 @@ class MeetingSummarizer:
         return self._generate_simulated_summary(transcript_data)
 
     def _generate_simulated_summary(self, transcript_data: FinalTranscriptData) -> MeetingSummary:
-        """Transcript-grounded fallback extraction — only when no API key is configured."""
+        """Transcript-grounded heuristic extraction — only used when NO model
+        call succeeded. Deliberately conservative: empty lists beat wrong ones.
+        Weak patterns (e.g. bare Hausa "zan") are avoided so discussion is not
+        misreported as decisions or commitments.
+        """
         if not transcript_data or not transcript_data.segments:
             return MeetingSummary(
                 executive_summary="No spoken dialogue was detected in this recording.",
@@ -163,46 +180,78 @@ class MeetingSummarizer:
                 speaker_contributions=[]
             )
 
-        # Build executive summary strictly from the user's actual spoken segments
         sentences = [seg.text.strip() for seg in transcript_data.segments if seg.text.strip()]
         full_text = " ".join(sentences)
-        if len(full_text) > 300:
-            exec_summary = full_text[:280].rsplit(".", 1)[0] + "."
+
+        # Executive summary: opening substantive content (skip bare greetings)
+        fillers = re.compile(
+            r"^(hello|hi|hey|sannu|sannu da aiki|good (morning|afternoon|evening)|"
+            r"thanks|thank you|na gode|okay|ok|yes|yeah|alhamdulillah)[.!, ]*$",
+            re.IGNORECASE,
+        )
+        substantive = [s for s in sentences if not fillers.match(s)]
+        if not substantive:
+            substantive = sentences
+        joined = " ".join(substantive)
+        if len(joined) > 400:
+            exec_summary = joined[:380].rsplit(".", 1)[0] + "…"
         else:
-            exec_summary = full_text
+            exec_summary = joined
 
-        key_points = [s for s in sentences[:4] if len(s) > 10]
+        # Key points: the most informative-length sentences, de-duplicated,
+        # skipping greetings — never more than 6.
+        seen: set = set()
+        key_points: List[str] = []
+        for s in substantive:
+            if len(s) < 25 or fillers.match(s):
+                continue
+            norm = s.lower().rstrip(".!?")
+            if norm in seen:
+                continue
+            seen.add(norm)
+            key_points.append(s if len(s) <= 160 else s[:157] + "…")
+            if len(key_points) >= 6:
+                break
 
+        # Strong, explicit signals only (EN + HA). Discussion verbs alone
+        # ("think", "maybe", "zan iya") do NOT qualify.
+        decision_pattern = re.compile(
+            r"\b(decided|decision|agreed|agreement|approved|approved|resolved|resolution|"
+            r"finalized|confirmed|mun amince|anka amince|hukunci|shawara ta amince)\b",
+            re.IGNORECASE,
+        )
+        action_pattern = re.compile(
+            r"\b(action item|responsible for|will (handle|send|prepare|submit|complete|review|draft|follow)|"
+            r"must (submit|complete|prepare|send)|need to (submit|complete|prepare|send)|"
+            r"deadline is|due (by|on)|assigned to)\b",
+            re.IGNORECASE,
+        )
         decisions = []
         action_items = []
-        decision_pattern = re.compile(r"\b(decide[sd]?|agreed?|resolved?|approved?|mun\s+amince|hukunci|zamu)\b")
-        action_pattern = re.compile(r"\b(will|must|should|need\s+to|action|task|zan|zaki|zaka|aikin)\b")
         for seg in transcript_data.segments:
             lower = seg.text.lower()
-            if decision_pattern.search(lower):
+            if decision_pattern.search(lower) and len(seg.text) <= 300:
                 decisions.append(
                     DecisionItem(
                         id=f"dec_{len(decisions) + 1}",
                         decision=seg.text.strip(),
-                        evidence_segment_ids=[seg.id]
+                        evidence_segment_ids=[seg.id],
                     )
                 )
-            if action_pattern.search(lower):
+            if action_pattern.search(lower) and len(seg.text) <= 300:
                 action_items.append(
                     ActionItem(
                         id=f"act_{len(action_items) + 1}",
                         task=seg.text.strip(),
                         assignee=seg.speaker,
                         evidence_segment_ids=[seg.id],
-                        completed=False
+                        completed=False,
                     )
                 )
 
         speaker_map = {}
         for seg in transcript_data.segments:
-            if seg.speaker not in speaker_map:
-                speaker_map[seg.speaker] = []
-            speaker_map[seg.speaker].append(seg.text.strip())
+            speaker_map.setdefault(seg.speaker, []).append(seg.text.strip())
 
         speaker_contributions = [
             SpeakerContribution(
@@ -213,8 +262,8 @@ class MeetingSummarizer:
         ]
 
         return MeetingSummary(
-            executive_summary=exec_summary,
-            key_points=key_points or [exec_summary],
+            executive_summary=exec_summary or full_text[:380],
+            key_points=key_points,
             decisions=decisions,
             action_items=action_items,
             questions=[],

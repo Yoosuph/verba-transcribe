@@ -10,11 +10,25 @@ T = TypeVar("T")
 RETRIABLE_MARKERS = (
     "503",
     "UNAVAILABLE",
-    "429",
-    "RESOURCE_EXHAUSTED",
     "overloaded",
     "deadline",
+    "high demand",
 )
+
+
+def is_retriable(message: str) -> bool:
+    """Transient errors are worth retrying in-place; daily quotas are not.
+
+    Free-tier daily quota errors (quotaId contains 'PerDay', retry in ~50s)
+    must fail fast so the model-rotation chain reaches a model that still has
+    quota instead of sleeping through this one. Minute-level 429s and 503s
+    remain retriable.
+    """
+    if "PerDay" in message or "per day" in message.lower():
+        return False
+    return any(marker in message for marker in RETRIABLE_MARKERS) or (
+        ("429" in message or "RESOURCE_EXHAUSTED" in message) and "retry in" in message.lower()
+    )
 
 
 async def call_with_retry(
@@ -34,9 +48,7 @@ async def call_with_retry(
             return await factory()
         except Exception as exc:
             last = exc
-            message = str(exc)
-            retriable = any(marker in message for marker in RETRIABLE_MARKERS)
-            if not retriable or attempt == attempts - 1:
+            if not is_retriable(str(exc)) or attempt == attempts - 1:
                 raise
             delay = base_delay * (attempt + 1)
             logger.warning("Transient Gemini error (retrying in %.1fs): %s", delay, exc)
