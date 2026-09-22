@@ -1,4 +1,4 @@
-import type { SessionState, MeetingInfo } from '../types/transcription';
+import type { SessionState } from '../types/transcription';
 
 export async function fetchSessions(): Promise<SessionState[]> {
   const res = await fetch('/api/sessions');
@@ -9,19 +9,6 @@ export async function fetchSessions(): Promise<SessionState[]> {
 export async function fetchSession(sessionId: string): Promise<SessionState> {
   const res = await fetch(`/api/sessions/${sessionId}`);
   if (!res.ok) throw new Error('Failed to fetch session');
-  return res.json();
-}
-
-export async function updateMeetingInfo(
-  sessionId: string,
-  meetingInfo?: MeetingInfo
-): Promise<SessionState> {
-  const res = await fetch(`/api/sessions/${sessionId}/meeting-info`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ meeting_info: meetingInfo }),
-  });
-  if (!res.ok) throw new Error('Failed to update meeting information');
   return res.json();
 }
 

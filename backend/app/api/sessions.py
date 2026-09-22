@@ -11,8 +11,6 @@ from app.models.transcription import (
     MeetingSummary,
     AskRequest,
     AskResponse,
-    UpdateMeetingInfoRequest,
-    MeetingInfo,
     TranscriptSegment
 )
 from app.services.session_manager import session_manager
@@ -266,14 +264,6 @@ async def ask_about_meeting(session_id: str, request: AskRequest):
         return AskResponse(answer=ans, evidence_segment_ids=_evidence_for(request.question, segments))
     except Exception as e:
         return AskResponse(answer=f"Could not answer question: {str(e)}", evidence_segment_ids=[])
-
-@router.put("/{session_id}/meeting-info", response_model=SessionState)
-async def update_meeting_info(session_id: str, request: UpdateMeetingInfoRequest):
-    """Updates user-provided meeting context (title, date, type, location, organizer, participants)."""
-    session = session_manager.update_meeting_info(session_id, request.meeting_info)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session
 
 @router.get("/{session_id}/export")
 async def export_session(session_id: str, format: str = Query("markdown", pattern="^(markdown|txt|json)$")):

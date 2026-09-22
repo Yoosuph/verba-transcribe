@@ -38,8 +38,8 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
   // Aggregate decisions and action items across all sessions
   const items: AggregatedItem[] = [];
   sessions.forEach((s) => {
-    const meetingTitle = s.title || s.meeting_info?.title || 'Untitled Meeting';
-    const meetingDate = s.meeting_info?.meeting_date || s.started_at;
+    const meetingTitle = s.title || 'Untitled Meeting';
+    const meetingDate = s.started_at;
 
     s.summary?.decisions?.forEach((d) => {
       items.push({

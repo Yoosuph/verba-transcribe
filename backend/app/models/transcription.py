@@ -38,14 +38,6 @@ class MeetingSummary(BaseModel):
     questions: List[str] = Field(default_factory=list, description="Unresolved questions or discussions raised")
     speaker_contributions: List[SpeakerContribution] = Field(default_factory=list, description="Summary of each speaker's contributions")
 
-class MeetingInfo(BaseModel):
-    """User-provided context about the meeting being recorded (all optional)."""
-    title: str = Field(default="", description="Meeting title, e.g. 'Weekly Team Sync'")
-    meeting_date: str = Field(default="", description="Date of the meeting, e.g. '21 September 2026'")
-    meeting_type: str = Field(default="", description="Type of meeting, e.g. 'Team Meeting', 'Client Call', 'Workshop'")
-    location: str = Field(default="", description="Location or platform, e.g. 'Conference Room B' or 'Google Meet'")
-    organizer: str = Field(default="", description="Meeting organizer / chairperson")
-    participants: List[str] = Field(default_factory=list, description="Expected or known participant names")
 class LiveTranscriptItem(BaseModel):
     id: str
     text: str
@@ -66,7 +58,6 @@ class SessionState(BaseModel):
     final_transcript: Optional[FinalTranscriptData] = None
     translated_transcript: Optional[FinalTranscriptData] = None
     summary: Optional[MeetingSummary] = None
-    meeting_info: Optional[MeetingInfo] = None
     speaker_names: Dict[str, str] = Field(default_factory=dict)
     has_audio: bool = False
     audio_url: Optional[str] = None
@@ -78,9 +69,6 @@ class RenameSpeakerRequest(BaseModel):
 
 class UpdateActionItemRequest(BaseModel):
     completed: bool
-
-class UpdateMeetingInfoRequest(BaseModel):
-    meeting_info: Optional[MeetingInfo] = None
 
 class AskRequest(BaseModel):
     question: str

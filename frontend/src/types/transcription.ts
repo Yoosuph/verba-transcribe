@@ -55,15 +55,6 @@ export interface MeetingSummary {
   speaker_contributions: SpeakerContribution[];
 }
 
-export interface MeetingInfo {
-  title: string;
-  meeting_date: string;
-  meeting_type: string;
-  location: string;
-  organizer: string;
-  participants: string[];
-}
-
 export interface SessionData {
   id: string;
   title?: string;
@@ -77,7 +68,6 @@ export interface SessionData {
   live_transcript: LiveTranscriptItem[];
   final_transcript?: FinalTranscriptData;
   summary?: MeetingSummary;
-  meeting_info?: MeetingInfo;
   speaker_names: Record<string, string>;
   has_audio?: boolean;
   audio_url?: string;

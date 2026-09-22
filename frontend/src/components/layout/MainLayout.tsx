@@ -6,10 +6,8 @@ import { MeetingsListView } from '../views/MeetingsListView';
 import { LiveRecordingView } from '../views/LiveRecordingView';
 import { MeetingDetailView } from '../views/MeetingDetailView';
 import { GlobalActionsView } from '../views/GlobalActionsView';
-import { NewMeetingModal } from '../views/NewMeetingModal';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
-import type { SessionState, MeetingSummary, MeetingInfo } from '../../types/transcription';
-import { updateMeetingInfo } from '../../services/api';
+import type { SessionState, MeetingSummary } from '../../types/transcription';
 import { FileText, Plus, AlertTriangle } from 'lucide-react';
 import { VerbaLogo } from '../common/VerbaLogo';
 
@@ -25,15 +23,6 @@ const PAGE_ORDER: Record<string, number> = {
 
 const todayString = () =>
   new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-
-const DEFAULT_MEETING_INFO: MeetingInfo = {
-  title: '',
-  meeting_date: todayString(),
-  meeting_type: 'Team Meeting',
-  location: '',
-  organizer: '',
-  participants: [],
-};
 
 export const MainLayout: React.FC = () => {
   const {
@@ -62,11 +51,8 @@ export const MainLayout: React.FC = () => {
   const [activePage, setActivePage] = useState<AppPage>('meetings');
   const [navDirection, setNavDirection] = useState<'forward' | 'backward' | 'up' | 'fade'>('fade');
 
-  // Meeting setup state
-  const [activeMeetingInfo, setActiveMeetingInfo] = useState<MeetingInfo>(DEFAULT_MEETING_INFO);
-  const [isNewMeetingModalOpen, setIsNewMeetingModalOpen] = useState(false);
-  // Guards an in-flight recording/processing session against accidental replacement
-  const [confirmNewMeetingWhileActive, setConfirmNewMeetingWhileActive] = useState(false);
+  // Guards starting a new recording while one is in flight
+  const [confirmNewRecordingWhileActive, setConfirmNewMeetingWhileActive] = useState(false);
 
   const navigateTo = (newPage: AppPage, customDir?: 'forward' | 'backward' | 'up' | 'fade') => {
     if (newPage === activePage) return;
@@ -165,8 +151,7 @@ export const MainLayout: React.FC = () => {
         speaker_contributions: [],
       };
 
-      const meetingTitle =
-        activeMeetingInfo.title.trim() || `Meeting · ${activeMeetingInfo.meeting_date || todayString()}`;
+      const meetingTitle = `Meeting · ${todayString()} · ${timeStr}`;
 
       const newSession: SessionState = {
         id: sessionId || `session_${Date.now()}`,
@@ -179,24 +164,8 @@ export const MainLayout: React.FC = () => {
         live_transcript: liveTranscript,
         final_transcript: finalTranscript || undefined,
         summary: finalSessionSummary,
-        meeting_info: { ...activeMeetingInfo, title: meetingTitle },
         speaker_names: {},
       };
-
-      // Persist meeting info to the backend session
-      if (sessionId) {
-        updateMeetingInfo(sessionId, newSession.meeting_info)
-          .then((updated) => {
-            setSessions((prev) => {
-              const exists = prev.some((s) => s.id === updated.id);
-              return exists
-                ? prev.map((s) => (s.id === updated.id ? updated : s))
-                : [newSession, ...prev];
-            });
-            setSelectedSession((prev) => (prev && prev.id === updated.id ? updated : prev));
-          })
-          .catch((err) => console.warn('Meeting info update:', err));
-      }
 
       setSessions((prev) => {
         const exists = prev.some((s) => s.id === newSession.id);
@@ -204,35 +173,17 @@ export const MainLayout: React.FC = () => {
       });
       setSelectedSession(newSession);
     }
-  }, [status, sessionId, summary, liveTranscript, finalTranscript, recordingSeconds, languageMode, activeMeetingInfo]);
+  }, [status, sessionId, summary, liveTranscript, finalTranscript, recordingSeconds, languageMode]);
 
   // Opening the "New Meeting" modal while a session is live must not silently
   // kill the recording. Route through a confirmation that keeps the mic streaming
   // until the user explicitly chooses to stop.
-  const handleRequestNewMeeting = () => {
+  const handleStartNewRecording = () => {
     if (status === 'recording' || status === 'processing') {
       setConfirmNewMeetingWhileActive(true);
       return;
     }
-    setIsNewMeetingModalOpen(true);
-  };
-
-  const handleStartMeetingWithInfo = (info: MeetingInfo) => {
-    setActiveMeetingInfo(info);
     startSession(languageMode);
-    navigateTo('live', 'up');
-  };
-
-  const handleSaveMeetingInfo = (info: MeetingInfo) => {
-    setActiveMeetingInfo(info);
-    if (effectiveSession) {
-      updateMeetingInfo(effectiveSession.id, info)
-        .then((updated) => {
-          setSessions((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-          setSelectedSession(updated);
-        })
-        .catch((err) => console.warn('Meeting info update:', err));
-    }
   };
 
   const handleStopRecording = () => {
@@ -241,9 +192,6 @@ export const MainLayout: React.FC = () => {
 
   const handleSelectMeeting = (session: SessionState) => {
     setSelectedSession(session);
-    if (session.meeting_info) {
-      setActiveMeetingInfo(session.meeting_info);
-    }
     navigateTo('transcript', 'forward');
   };
 
@@ -273,25 +221,10 @@ export const MainLayout: React.FC = () => {
                 <VerbaLogo size="sm" variant="full" lightMode={true} />
               </div>
 
-              {/* Center: Active Meeting Badge */}
-              <button
-                onClick={() => handleRequestNewMeeting()}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-[11px] font-semibold text-slate-800 transition-all cursor-pointer active:scale-95"
-                title="Edit / Configure Meeting Information"
-              >
-                <FileText className="w-3 h-3 text-[#008751]" />
-                <span className="truncate max-w-[120px] sm:max-w-[190px]">
-                  {effectiveSession?.meeting_info?.title ||
-                    activeMeetingInfo.title ||
-                    activeMeetingInfo.meeting_type ||
-                    'Set up meeting'}
-                </span>
-              </button>
-
               {/* Right: Actions */}
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleRequestNewMeeting()}
+                  onClick={() => handleStartNewRecording()}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
                   title="Configure & Record New Meeting"
                 >
@@ -326,7 +259,7 @@ export const MainLayout: React.FC = () => {
               <MeetingsListView
                 sessions={sessions}
                 onSelectMeeting={handleSelectMeeting}
-                onStartRecord={() => handleRequestNewMeeting()}
+                onStartRecord={() => handleStartNewRecording()}
               />
             )}
 
@@ -378,7 +311,7 @@ export const MainLayout: React.FC = () => {
                     Record a meeting or select an existing session to inspect its speaker-diarized transcript and playback.
                   </p>
                   <button
-                    onClick={() => handleRequestNewMeeting()}
+                    onClick={() => handleStartNewRecording()}
                     className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -396,7 +329,7 @@ export const MainLayout: React.FC = () => {
                   setSelectedSession(session);
                   navigateTo('transcript', 'forward');
                 }}
-                onStartRecord={() => handleRequestNewMeeting()}
+                onStartRecord={() => handleStartNewRecording()}
               />
             )}
           </div>
@@ -413,17 +346,8 @@ export const MainLayout: React.FC = () => {
         </PhoneFrame>
       </main>
 
-      {/* New Meeting Setup Modal */}
-      <NewMeetingModal
-        isOpen={isNewMeetingModalOpen}
-        onClose={() => setIsNewMeetingModalOpen(false)}
-        initialInfo={effectiveSession?.meeting_info || activeMeetingInfo}
-        onStartMeeting={handleStartMeetingWithInfo}
-        onSaveMeetingInfo={handleSaveMeetingInfo}
-      />
-
       {/* Guard: opening setup while a session is live must be explicit */}
-      {confirmNewMeetingWhileActive && (
+      {confirmNewRecordingWhileActive && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-4">
             <div className="flex items-start gap-3">
@@ -442,7 +366,7 @@ export const MainLayout: React.FC = () => {
                 onClick={() => {
                   setConfirmNewMeetingWhileActive(false);
                   stopSession();
-                  setIsNewMeetingModalOpen(true);
+                  setTimeout(() => startSession(languageMode), 200);
                 }}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold active:scale-[0.99] transition-all cursor-pointer"
               >

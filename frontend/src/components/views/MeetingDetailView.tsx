@@ -8,7 +8,6 @@ import {
   Square,
   Clock,
   Calendar,
-  MapPin,
   Users,
   User,
   Copy,
@@ -135,7 +134,6 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
     }
   };
 
-  const info = session.meeting_info;
   const summary = session.summary;
   const segments = session.final_transcript?.segments || [];
   const filteredSegments = transcriptQuery.trim()
@@ -167,32 +165,12 @@ export const MeetingDetailView: React.FC<MeetingDetailViewProps> = ({
           </button>
           <div className="min-w-0">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#008751] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
-              {info?.meeting_type || 'Meeting Record'}
+              Meeting Record
             </span>
             <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-tight mt-0.5 truncate">
-              {session.title || info?.title || 'Untitled Meeting'}
+              {session.title || 'Untitled Meeting'}
             </h1>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[11px] text-slate-500">
-              {info?.meeting_date && (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-slate-400" /> {info.meeting_date}
-                </span>
-              )}
-              {info?.location && (
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-slate-400" /> {info.location}
-                </span>
-              )}
-              {info?.organizer && (
-                <span className="inline-flex items-center gap-1">
-                  <User className="w-3 h-3 text-slate-400" /> {info.organizer}
-                </span>
-              )}
-              {(info?.participants?.length || 0) > 0 && (
-                <span className="inline-flex items-center gap-1">
-                  <Users className="w-3 h-3 text-slate-400" /> {info!.participants.length} participants
-                </span>
-              )}
               <span className="inline-flex items-center gap-1 font-mono">
                 <Clock className="w-3 h-3 text-slate-400" /> {formatTime(session.duration_seconds || 0)}
               </span>

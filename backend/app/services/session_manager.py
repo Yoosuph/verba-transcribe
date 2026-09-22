@@ -11,8 +11,7 @@ from app.models.transcription import (
     FinalTranscriptData,
     MeetingSummary,
     TranscriptSegment,
-    ActionItem,
-    MeetingInfo
+    ActionItem
 )
 
 logger = logging.getLogger(__name__)
@@ -77,7 +76,6 @@ class SessionManager:
                     live_transcript=[],
                     final_transcript=None,
                     summary=None,
-                    meeting_info=None,
                     speaker_names={},
                     has_audio=False,
                     audio_url=None
@@ -239,21 +237,6 @@ class SessionManager:
             if session:
                 session.status = "error"
                 session.error_message = error_message
-
-    def update_meeting_info(
-        self,
-        session_id: str,
-        meeting_info: Optional[MeetingInfo] = None
-    ) -> Optional[SessionState]:
-        with self._lock:
-            session = self.get(session_id)
-            if not session:
-                return None
-            if meeting_info is not None:
-                session.meeting_info = meeting_info
-                if meeting_info.title:
-                    session.title = meeting_info.title
-            return session
 
 
 session_manager = SessionManager()

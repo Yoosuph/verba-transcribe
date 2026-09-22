@@ -5,8 +5,6 @@ import {
   Clock,
   Volume2,
   Plus,
-  Users,
-  User,
   ChevronRight,
   Calendar,
   CheckCircle2,
@@ -32,19 +30,10 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
     .filter((s) => {
       const q = searchQuery.toLowerCase().trim();
       const title = (s.title || '').toLowerCase();
-      const info = s.meeting_info;
-      const type = (info?.meeting_type || '').toLowerCase();
-      const location = (info?.location || '').toLowerCase();
-      const organizer = (info?.organizer || '').toLowerCase();
-      const participants = (info?.participants || []).join(' ').toLowerCase();
       const summary = (s.summary?.executive_summary || '').toLowerCase();
 
       const matchesQuery = !q || (
         title.includes(q) ||
-        type.includes(q) ||
-        location.includes(q) ||
-        organizer.includes(q) ||
-        participants.includes(q) ||
         summary.includes(q)
       );
 
@@ -52,7 +41,7 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
 
       if (filterChip === 'today') {
         const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-        return (info?.meeting_date || '').includes(todayStr) || (s.started_at || '').includes('Today');
+        return (s.started_at || '').includes('Today') || (s.started_at || '').includes(todayStr);
       }
       if (filterChip === 'with-actions') {
         return (s.summary?.action_items?.length || 0) > 0;
@@ -164,10 +153,7 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
         ) : (
           <div className="space-y-3">
             {filteredSessions.map((session) => {
-              const info = session.meeting_info;
-              const displayTitle = info?.title || session.title || 'Untitled Meeting';
-              const participants = info?.participants || [];
-              const organizer = info?.organizer || '';
+              const displayTitle = session.title || 'Untitled Meeting';
               const actionCount = session.summary?.action_items?.length || 0;
               const isProcessing = session.status === 'processing';
 
@@ -193,20 +179,10 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                         {displayTitle}
                       </h3>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                        {info?.meeting_type && (
-                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
-                            {info.meeting_type}
-                          </span>
-                        )}
                         <span className="text-[10px] text-slate-400 flex items-center gap-1">
                           <Calendar className="w-2.5 h-2.5" />
-                          <span>{info?.meeting_date || session.started_at || '—'}</span>
+                          <span>{session.started_at || '—'}</span>
                         </span>
-                        {info?.location && (
-                          <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
-                            {info.location}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -233,20 +209,6 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                   {/* Card Footer: Metadata & Actions */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-xs">
                     <div className="flex items-center gap-2">
-                      {organizer && (
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-                          <User className="w-3 h-3 text-slate-400" />
-                          <span className="truncate max-w-[120px]">{organizer}</span>
-                        </span>
-                      )}
-
-                      {participants.length > 0 && (
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                          <Users className="w-3 h-3 text-slate-400" />
-                          <span>{participants.length}</span>
-                        </span>
-                      )}
-
                       <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
                         <Clock className="w-3 h-3 text-slate-400" />
                         <span>{formatDuration(session.duration_seconds || 0)}</span>
