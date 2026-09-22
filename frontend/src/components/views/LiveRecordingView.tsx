@@ -7,7 +7,7 @@ import {
   Play,
   Loader2,
 } from 'lucide-react';
-import { JudiciaryLogo } from '../common/JudiciaryLogo';
+import { VerbaLogo } from '../common/VerbaLogo';
 import type { LiveTranscriptItem, ProcessingStage } from '../../types/transcription';
 
 interface LiveRecordingViewProps {
@@ -151,9 +151,9 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
       : 20;
 
   const stages = [
-    { id: 'final_transcription', label: 'Transcribing court audio' },
-    { id: 'speaker_diarization', label: 'Diarizing testimony & speakers' },
-    { id: 'summarization', label: 'Synthesizing overview & rulings' },
+    { id: 'final_transcription', label: 'Transcribing audio' },
+    { id: 'speaker_diarization', label: 'Identifying speakers' },
+    { id: 'summarization', label: 'Generating summary' },
   ] as const;
   const stageIndex = processingStage === 'summarization' ? 2 : processingStage === 'speaker_diarization' ? 1 : 0;
 
@@ -161,10 +161,10 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
   if (showProcessingScreen) {
     const stageMessage =
       processingStage === 'summarization'
-        ? 'Synthesizing overview and rulings...'
+        ? 'Generating meeting summary...'
         : processingStage === 'speaker_diarization'
-        ? 'Diarizing testimony & speakers...'
-        : 'Transcribing court audio...';
+        ? 'Identifying speakers...'
+        : 'Transcribing audio...';
 
     return (
       <div className="flex-1 flex flex-col bg-[#F8FAF9] text-slate-900 justify-between p-6 select-none relative overflow-hidden">
@@ -186,14 +186,14 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
           {/* Minimal Crest Tile */}
           <div className="relative flex items-center justify-center">
             <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex items-center justify-center">
-              <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+              <VerbaLogo size="sm" variant="icon" lightMode={true} />
             </div>
             <div className="absolute -inset-2 rounded-3xl border border-emerald-500/20 animate-pulse pointer-events-none" />
           </div>
 
           <div className="space-y-1.5">
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              Finalizing Proceeding
+              Finalizing Meeting
             </h2>
             <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
               {stageMessage}
@@ -202,7 +202,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
 
           {/* Hairline Minimal Progress Bar */}
           <div className="w-48 space-y-1.5 pt-1">
-            <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Finalizing proceeding">
+            <div className="w-full h-1 bg-slate-200/70 rounded-full overflow-hidden" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Finalizing meeting">
               <div
                 className="h-full bg-[#008751] rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${progressPercent}%` }}
@@ -249,7 +249,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
             </button>
           )}
           <span className="text-[11px] text-slate-400">
-            Proceeding will open automatically once finalized
+            Summary will open automatically once finalized
           </span>
         </div>
       </div>
@@ -263,16 +263,16 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
       <div className="flex items-center justify-between px-5 pt-4 pb-2 flex-shrink-0">
         <button
           onClick={onMinimize}
-          aria-label="Minimize to proceedings, recording continues"
+          aria-label="Minimize to meetings, recording continues"
           className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white min-w-[44px]"
-          title="Minimize to Proceedings list"
+          title="Minimize to Meetings list"
         >
           <ChevronDown className="w-5 h-5" />
         </button>
 
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1.5">
-            <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+            <VerbaLogo size="sm" variant="icon" lightMode={true} />
             <span className="text-sm font-bold text-white/95 truncate max-w-[200px]">
               {title}
             </span>
@@ -306,10 +306,10 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
         <div className="bg-white/15 backdrop-blur-sm text-white/95 text-xs font-medium px-4 py-1.5 rounded-full shadow-inner flex items-center gap-2">
           <span>
             {languageMode === 'ha'
-              ? 'Hearing Hausa'
+              ? 'Meeting Hausa'
               : languageMode === 'en'
-              ? 'Hearing English'
-              : 'Hearing English & Hausa'}
+              ? 'Meeting English'
+              : 'Meeting English & Hausa'}
           </span>
         </div>
       </div>

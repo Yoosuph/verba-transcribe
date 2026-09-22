@@ -220,12 +220,12 @@ class GeminiLiveTranscriber:
     async def _mock_transcription_loop(self) -> None:
         """Fallback simulation for offline / testing."""
         sample_dialogues = [
-            ("Barkan ku da", "Barkan ku da warhaka, yau zamu tattauna batun tsarin shari'a."),
-            ("Good morning everyone,", "Good morning everyone, we are reviewing the pending court schedules for Jigawa state."),
+            ("Barkan ku da", "Barkan ku da warhaka, yau zamu tattauna batun kasafin kudin mu."),
+            ("Good morning everyone,", "Good morning everyone, we are reviewing the agenda for this week."),
             ("Dangane da batun", "Dangane da batun kasafin kudi, mun amince a kammala rubuta rahoton kafin ranar Juma'a."),
-            ("Mr. Chairman, regarding", "Mr. Chairman, regarding the digitisation of case records, the IT team has commenced deployment."),
+            ("Mr. Chairman, regarding", "Mr. Chairman, regarding the budget review, the finance team has circulated the latest figures."),
             ("Muna bukatar", "Muna bukatar kowane sashe ya gabatar da lissafin ayyukan da aka kammala."),
-            ("Action item is clear:", "Action item is clear: the registrar will distribute the updated cause list by 4:00 PM tomorrow.")
+            ("Action item is clear:", "Action item is clear: the coordinator will distribute the updated agenda by 4:00 PM tomorrow.")
         ]
 
         dialogue_idx = 0

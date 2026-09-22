@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     max_session_minutes: int = 30
     max_audio_size_mb: int = 100
     mock_mode_if_no_key: bool = True
-    temp_audio_dir: str = "/tmp/judiciary_audio"
+    temp_audio_dir: str = "/tmp/meeting_audio"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

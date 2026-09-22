@@ -1,65 +1,77 @@
 import React, { useState } from 'react';
-import { Search, Mic, Clock, Volume2, Plus, Scale, Gavel, User, ChevronRight, Calendar } from 'lucide-react';
+import {
+  Search,
+  Mic,
+  Clock,
+  Volume2,
+  Plus,
+  Users,
+  User,
+  ChevronRight,
+  Calendar,
+  CheckCircle2,
+} from 'lucide-react';
 import type { SessionState } from '../../types/transcription';
-import { JudiciaryLogo } from '../common/JudiciaryLogo';
+import { VerbaLogo } from '../common/VerbaLogo';
 
 interface MeetingsListViewProps {
   sessions: SessionState[];
   onSelectMeeting: (session: SessionState) => void;
   onStartRecord: () => void;
-  /** Shown on cards with a generated report; jumps straight to the report document. */
-  onOpenReport?: (session: SessionState) => void;
 }
 
 export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
   sessions,
   onSelectMeeting,
   onStartRecord,
-  onOpenReport,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterChip, setFilterChip] = useState<'all' | 'today' | 'mirath' | 'orders'>('all');
+  const [filterChip, setFilterChip] = useState<'all' | 'today' | 'with-actions'>('all');
 
-  // Filter meetings based on search & filter chip
   const filteredSessions = sessions
     .filter((s) => {
-    const q = searchQuery.toLowerCase().trim();
-    const caseNum = (s.case_info?.case_number || '').toLowerCase();
-    const court = (s.case_info?.court || '').toLowerCase();
-    const claimant = (s.parties?.claimant || '').toLowerCase();
-    const defendant = (s.parties?.defendant || '').toLowerCase();
-    const title = (s.title || '').toLowerCase();
-    const summary = (s.summary?.executive_summary || '').toLowerCase();
-    const cause = (s.case_info?.hearing_type || '').toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
+      const title = (s.title || '').toLowerCase();
+      const info = s.meeting_info;
+      const type = (info?.meeting_type || '').toLowerCase();
+      const location = (info?.location || '').toLowerCase();
+      const organizer = (info?.organizer || '').toLowerCase();
+      const participants = (info?.participants || []).join(' ').toLowerCase();
+      const summary = (s.summary?.executive_summary || '').toLowerCase();
 
-    const matchesQuery = !q || (
-      caseNum.includes(q) ||
-      court.includes(q) ||
-      claimant.includes(q) ||
-      defendant.includes(q) ||
-      title.includes(q) ||
-      summary.includes(q) ||
-      cause.includes(q)
-    );
+      const matchesQuery = !q || (
+        title.includes(q) ||
+        type.includes(q) ||
+        location.includes(q) ||
+        organizer.includes(q) ||
+        participants.includes(q) ||
+        summary.includes(q)
+      );
 
-    if (!matchesQuery) return false;
+      if (!matchesQuery) return false;
 
-    if (filterChip === 'today') {
-      const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-      return (s.case_info?.hearing_date || '').includes(todayStr) || (s.started_at || '').includes('Today');
-    }
-    if (filterChip === 'mirath') {
-      return (s.case_info?.hearing_type || '').toLowerCase().includes('mirath') ||
-        (s.case_info?.hearing_type || '').toLowerCase().includes('inheritance');
-    }
-    if (filterChip === 'orders') {
-      return (s.hearing_report?.orders?.length || 0) > 0 || (s.summary?.decisions?.length || 0) > 0;
-    }
-    return true;
-  })
-  .sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
+      if (filterChip === 'today') {
+        const todayStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        return (info?.meeting_date || '').includes(todayStr) || (s.started_at || '').includes('Today');
+      }
+      if (filterChip === 'with-actions') {
+        return (s.summary?.action_items?.length || 0) > 0;
+      }
+      return true;
+    })
+    .sort((a, b) => (b.duration_seconds || 0) - (a.duration_seconds || 0));
 
   const hasActiveFilters = searchQuery.trim() !== '' || filterChip !== 'all';
+
+  const formatDuration = (secs: number) => {
+    const s = Math.max(0, Math.round(secs));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return h > 0
+      ? `${h}h ${m}m`
+      : `${m}:${sec.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-[#F8FAF9] text-slate-900 overflow-hidden relative">
@@ -69,216 +81,149 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white border border-emerald-950/10 p-1.5 flex items-center justify-center shadow-xs flex-shrink-0">
-              <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+              <VerbaLogo size="sm" variant="icon" lightMode />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#008751] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
-                  Cause List & Registry
+                  Meeting Library
                 </span>
-                <span className="text-[11px] text-slate-500 font-medium">Jigawa State Judiciary</span>
               </div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight leading-tight mt-0.5">
-                Court Proceedings
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-tight">
+                Your Meetings
               </h1>
             </div>
           </div>
 
-          {/* Primary Action Button */}
           <button
             onClick={onStartRecord}
-            className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] active:bg-[#00603a] text-white font-bold text-xs shadow-sm hover:shadow active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
-            title="Start New Hearing Recording"
+            className="self-start sm:self-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-md shadow-emerald-700/20 active:scale-95 transition-all cursor-pointer"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>New Hearing & Record</span>
+            <Plus className="w-4 h-4" />
+            <span>New Meeting</span>
           </button>
         </div>
 
-        {/* Search & Filter Toolbar */}
-        <div className="space-y-2.5 bg-white p-3 sm:p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
-          {/* Search Bar */}
+        {/* Search + Filter Chips */}
+        <div className="space-y-2.5">
           <div className="relative">
-            <div className="w-full bg-slate-50 border border-slate-200/80 hover:border-slate-300 focus-within:border-[#008751] focus-within:ring-2 focus-within:ring-[#008751]/20 rounded-xl px-3.5 py-2 flex items-center gap-2.5 transition-all">
-              <Search className="w-4 h-4 text-slate-400 flex-shrink-0" aria-hidden="true" />
-              <label htmlFor="hearing-search" className="sr-only">Search proceedings</label>
-              <input
-                id="hearing-search"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search suit number, parties, counsel, or cause..."
-                aria-label="Search suit number, parties, counsel, or cause"
-                className="bg-transparent text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none w-full font-medium min-h-[32px]"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="text-slate-400 hover:text-slate-600 text-xs font-bold px-1"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search meetings, participants, summaries..."
+              className="w-full h-11 pl-10 pr-4 rounded-2xl bg-white border border-slate-200/90 text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:outline-none focus:border-[#008751] focus:ring-2 focus:ring-emerald-100 transition-all"
+              aria-label="Search meetings"
+            />
           </div>
 
-          {/* Filter Chips Horizontal Row */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar text-[11px] font-semibold" role="group" aria-label="Filter proceedings">
-            <button
-              onClick={() => setFilterChip('all')}
-              aria-pressed={filterChip === 'all'}
-              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
-                filterChip === 'all'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              All Proceedings ({sessions.length})
-            </button>
-            <button
-              onClick={() => setFilterChip('today')}
-              aria-pressed={filterChip === 'today'}
-              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
-                filterChip === 'today'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              Today's Sittings
-            </button>
-            <button
-              onClick={() => setFilterChip('mirath')}
-              aria-pressed={filterChip === 'mirath'}
-              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
-                filterChip === 'mirath'
-                  ? 'bg-[#008751] text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              Inheritance (Mirath)
-            </button>
-            <button
-              onClick={() => setFilterChip('orders')}
-              aria-pressed={filterChip === 'orders'}
-              className={`px-3 py-1.5 min-h-[36px] rounded-lg transition-all whitespace-nowrap cursor-pointer active:scale-95 ${
-                filterChip === 'orders'
-                  ? 'bg-amber-800 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80'
-              }`}
-            >
-              With Orders / Decrees
-            </button>
+          <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
+            {(['all', 'today', 'with-actions'] as const).map((chip) => (
+              <button
+                key={chip}
+                onClick={() => setFilterChip(chip)}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer active:scale-95 ${
+                  filterChip === chip
+                    ? 'bg-[#008751] text-white border-[#008751] shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-800'
+                }`}
+              >
+                {chip === 'all' ? 'All' : chip === 'today' ? 'Today' : 'With Actions'}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Docket Section List */}
-        <div className="flex items-center justify-between" aria-live="polite">
-          <p className="text-[11px] font-semibold text-slate-500">
-            {filteredSessions.length} of {sessions.length} proceedings
-          </p>
-          {hasActiveFilters && (
-            <button
-              onClick={() => { setSearchQuery(''); setFilterChip('all'); }}
-              className="text-[11px] font-bold text-[#008751] hover:underline underline-offset-2 min-h-[32px] px-2 cursor-pointer"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
+        {/* Empty State */}
         {filteredSessions.length === 0 ? (
-          <div className="py-14 px-4 bg-white rounded-2xl border border-slate-200/80 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-[#008751] flex items-center justify-center shadow-xs">
-              <Scale className="w-7 h-7" />
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-8 text-center max-w-md mx-auto space-y-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] mt-6">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-[#008751] mx-auto shadow-xs">
+              <Mic className="w-7 h-7" />
             </div>
-            <div className="space-y-1 max-w-sm">
-              <h3 className="text-base font-bold text-slate-900">
-                {searchQuery ? 'No matching proceedings found' : 'No hearing proceedings on record yet'}
+            <div className="space-y-1.5">
+              <h3 className="text-sm font-bold text-slate-900">
+                {hasActiveFilters ? 'No Matching Meetings' : 'No Meetings Yet'}
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                {searchQuery
-                  ? 'Try refining your suit number, party name, or clear search filter.'
-                  : 'Open a new court proceeding to transcribe live testimony, record dialogue, and generate certified judicial hearing reports.'}
+                {hasActiveFilters
+                  ? 'Try a different search term or clear the filters.'
+                  : 'Record your first meeting to get a speaker-labelled transcript and a grounded summary with decisions and action items.'}
               </p>
             </div>
-            <button
-              onClick={onStartRecord}
-              className="px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-white text-xs font-bold shadow-sm active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <Mic className="w-3.5 h-3.5" />
-              <span>Open New Hearing</span>
-            </button>
+            {!hasActiveFilters && (
+              <button
+                onClick={onStartRecord}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all cursor-pointer"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Record First Meeting</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
             {filteredSessions.map((session) => {
+              const info = session.meeting_info;
+              const displayTitle = info?.title || session.title || 'Untitled Meeting';
+              const participants = info?.participants || [];
+              const organizer = info?.organizer || '';
+              const actionCount = session.summary?.action_items?.length || 0;
               const isProcessing = session.status === 'processing';
-              const orderCount = (session.hearing_report?.orders?.length || 0) + (session.summary?.decisions?.length || 0);
-              const durationSecs = session.duration_seconds || 0;
-              const durationFormatted = durationSecs >= 60
-                ? `${Math.round(durationSecs / 60)} min`
-                : `${Math.round(durationSecs)} sec`;
-
-              const suitNo = session.case_info?.case_number || 'JGS/SCA/DTS/CV/018/2026';
-              const hearingDate = session.case_info?.hearing_date || session.started_at || 'Today';
-              const hearingType = session.case_info?.hearing_type || 'Civil Appeal';
-              const claimantName = session.parties?.claimant?.split('(')[0].trim() || 'Appellant';
-              const defendantName = session.parties?.defendant?.split('(')[0].trim() || 'Respondent';
-              const presiding = session.case_info?.judge || 'Hon. Kadi Sani Salihu';
-              const division = session.case_info?.division || 'Dutse Judicial Division';
 
               return (
                 <article
                   key={session.id}
                   onClick={() => onSelectMeeting(session)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectMeeting(session); } }}
-                  tabIndex={0}
+                  className="group bg-white rounded-2xl p-4 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:border-emerald-300 hover:shadow-md cursor-pointer active:scale-[0.99] transition-all space-y-3"
                   role="button"
-                  aria-label={`Open record ${suitNo}, ${claimantName} versus ${defendantName}`}
-                  className="group bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-[#008751]/60 transition-all duration-150 cursor-pointer space-y-3 touch-press focus-visible:outline-2"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectMeeting(session);
+                    }
+                  }}
+                  aria-label={`Open meeting ${displayTitle}`}
                 >
-                  {/* Card Header: Suit Number & Division Tag */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2.5 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
-                        {suitNo}
-                      </span>
-                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
-                        {division.replace(' Judicial Division', '')}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{hearingDate}</span>
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-bold text-slate-900 leading-snug truncate">
+                        {displayTitle}
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                        {info?.meeting_type && (
+                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">
+                            {info.meeting_type}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                          <Calendar className="w-2.5 h-2.5" />
+                          <span>{info?.meeting_date || session.started_at || '—'}</span>
+                        </span>
+                        {info?.location && (
+                          <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
+                            {info.location}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Card Main: Parties & Cause */}
-                  <div className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h2 className="text-sm sm:text-base font-bold text-slate-900 group-hover:text-[#008751] transition-colors leading-snug">
-                        {claimantName} <span className="text-slate-400 font-serif italic text-xs font-normal">v.</span> {defendantName}
-                      </h2>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs text-[#008751] font-semibold">
-                      <Gavel className="w-3 h-3 text-[#008751] flex-shrink-0" />
-                      <span className="truncate">{hearingType}</span>
-                    </div>
-
+                  {/* Summary or Processing State */}
+                  <div className="min-h-[2.5rem]">
                     {isProcessing ? (
-                      <div className="pt-2 pb-1">
-                        <div className="flex items-center justify-between text-xs font-semibold text-[#008751] mb-1">
-                          <span className="animate-pulse">Transcribing & diarizing judicial record...</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="flex items-center gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200/60 rounded-lg px-2.5 py-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        <span>Transcribing & summarizing…</span>
+                        <div className="flex-1 h-1 bg-amber-100 rounded-full overflow-hidden">
                           <div className="w-[70%] h-full bg-[#008751] rounded-full animate-pulse" />
                         </div>
                       </div>
                     ) : (
                       session.summary?.executive_summary && (
-                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed pt-0.5 text-justify">
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed pt-0.5">
                           {session.summary.executive_summary}
                         </p>
                       )
@@ -288,14 +233,23 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                   {/* Card Footer: Metadata & Actions */}
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
-                        <User className="w-3 h-3 text-slate-400" />
-                        <span className="truncate max-w-[140px] sm:max-w-[180px]">{presiding}</span>
-                      </span>
+                      {organizer && (
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium">
+                          <User className="w-3 h-3 text-slate-400" />
+                          <span className="truncate max-w-[120px]">{organizer}</span>
+                        </span>
+                      )}
+
+                      {participants.length > 0 && (
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <Users className="w-3 h-3 text-slate-400" />
+                          <span>{participants.length}</span>
+                        </span>
+                      )}
 
                       <span className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
                         <Clock className="w-3 h-3 text-slate-400" />
-                        <span>{durationFormatted}</span>
+                        <span>{formatDuration(session.duration_seconds || 0)}</span>
                       </span>
 
                       {session.has_audio && (
@@ -307,26 +261,11 @@ export const MeetingsListView: React.FC<MeetingsListViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {orderCount > 0 && (
+                      {actionCount > 0 && (
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#008751] text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
-                          <Gavel className="w-2.5 h-2.5" />
-                          <span>{orderCount} {orderCount === 1 ? 'Order' : 'Orders'}</span>
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          <span>{actionCount} {actionCount === 1 ? 'Action' : 'Actions'}</span>
                         </span>
-                      )}
-
-                      {onOpenReport && session.hearing_report && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenReport(session);
-                          }}
-                          className="px-2.5 py-0.5 rounded-full bg-[#042A1D] text-white text-[10px] font-bold flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
-                          title="Open the generated Judicial Hearing Report"
-                          aria-label={`Open Judicial Hearing Report for ${suitNo}`}
-                        >
-                          <Scale className="w-2.5 h-2.5" aria-hidden="true" />
-                          <span>Report</span>
-                        </button>
                       )}
 
                       <span className="inline-flex items-center gap-0.5 text-xs font-bold text-[#008751] group-hover:translate-x-0.5 transition-transform">

@@ -12,9 +12,7 @@ from app.models.transcription import (
     MeetingSummary,
     TranscriptSegment,
     ActionItem,
-    CaseInformation,
-    HearingParties,
-    JudicialHearingReport
+    MeetingInfo
 )
 
 logger = logging.getLogger(__name__)
@@ -69,11 +67,9 @@ class SessionManager:
             self._evict_expired()
             if sid not in self._sessions:
                 self._created_at[sid] = time.monotonic()
-                default_case = CaseInformation()
-                default_parties = HearingParties()
                 self._sessions[sid] = SessionState(
                     id=sid,
-                    title=f"{default_case.case_number} · {default_case.court}",
+                    title="New Meeting",
                     status="idle",
                     language_mode=language_mode,
                     started_at=None,
@@ -81,9 +77,7 @@ class SessionManager:
                     live_transcript=[],
                     final_transcript=None,
                     summary=None,
-                    case_info=default_case,
-                    parties=default_parties,
-                    hearing_report=None,
+                    meeting_info=None,
                     speaker_names={},
                     has_audio=False,
                     audio_url=None
@@ -246,57 +240,20 @@ class SessionManager:
                 session.status = "error"
                 session.error_message = error_message
 
-    def update_case_info(
+    def update_meeting_info(
         self,
         session_id: str,
-        case_info: Optional[CaseInformation] = None,
-        parties: Optional[HearingParties] = None
+        meeting_info: Optional[MeetingInfo] = None
     ) -> Optional[SessionState]:
         with self._lock:
             session = self.get(session_id)
             if not session:
                 return None
-            if case_info is not None:
-                session.case_info = case_info
-                if case_info.case_number:
-                    session.title = f"{case_info.case_number} · {case_info.court}"
-            if parties is not None:
-                session.parties = parties
+            if meeting_info is not None:
+                session.meeting_info = meeting_info
+                if meeting_info.title:
+                    session.title = meeting_info.title
             return session
 
-    def set_report_generating(self, session_id: str) -> Optional[SessionState]:
-        """Marks report generation as in progress (idempotent; safe to call again)."""
-        with self._lock:
-            session = self._sessions.get(session_id)
-            if not session:
-                return None
-            self._touch(session_id)
-            session.report_status = "generating"
-            return session
-
-    def set_report_error(self, session_id: str, error_message: str) -> Optional[SessionState]:
-        """Marks report generation as failed, keeping any previously generated report intact."""
-        with self._lock:
-            session = self._sessions.get(session_id)
-            if not session:
-                return None
-            self._touch(session_id)
-            session.report_status = "error"
-            session.error_message = error_message
-            return session
-
-    def set_hearing_report(self, session_id: str, report: JudicialHearingReport) -> Optional[SessionState]:
-        with self._lock:
-            session = self.get(session_id)
-            if not session:
-                return None
-            session.hearing_report = report
-            session.report_status = "ready"
-            if report.case:
-                session.case_info = report.case
-                session.title = f"{report.case.case_number} · {report.case.court}"
-            if report.parties:
-                session.parties = report.parties
-            return session
 
 session_manager = SessionManager()

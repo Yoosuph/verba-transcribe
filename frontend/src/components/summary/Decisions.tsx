@@ -1,6 +1,6 @@
 import React from 'react';
 import type { DecisionItem } from '../../types/transcription';
-import { Gavel, ExternalLink } from 'lucide-react';
+import { BadgeCheck, ExternalLink } from 'lucide-react';
 
 interface DecisionsProps {
   decisions: DecisionItem[];
@@ -14,7 +14,7 @@ export const Decisions: React.FC<DecisionsProps> = ({ decisions, onEvidenceClick
     <div className="p-4 rounded-2xl bg-[#0b1610]/70 border border-emerald-500/20 shadow-md">
       <div className="flex items-center gap-2 mb-3">
         <div className="p-1.5 rounded-lg bg-[#008751]/20 border border-[#008751]/30 text-emerald-300">
-          <Gavel className="w-3.5 h-3.5" />
+          <BadgeCheck className="w-3.5 h-3.5" />
         </div>
         <h3 className="text-xs font-bold uppercase tracking-wider text-white">Agreed Decisions</h3>
         <span className="text-[10px] text-emerald-300/60 font-mono">({decisions.length})</span>

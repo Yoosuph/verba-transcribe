@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: judiciary_transcribe_backend
+    container_name: meeting_transcribe_backend
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -15,17 +15,17 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:80}
       - MAX_SESSION_MINUTES=${MAX_SESSION_MINUTES:-30}
       - MAX_AUDIO_SIZE_MB=${MAX_AUDIO_SIZE_MB:-100}
-      - TEMP_AUDIO_DIR=/tmp/judiciary_audio
+      - TEMP_AUDIO_DIR=/tmp/meeting_audio
     env_file:
       - .env
     volumes:
-      - /tmp/judiciary_audio:/tmp/judiciary_audio
+      - /tmp/meeting_audio:/tmp/meeting_audio
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: judiciary_transcribe_frontend
+    container_name: meeting_transcribe_frontend
     restart: unless-stopped
     ports:
       - "5173:80"

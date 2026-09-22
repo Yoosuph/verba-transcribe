@@ -11,16 +11,13 @@ from app.models.transcription import (
     MeetingSummary,
     AskRequest,
     AskResponse,
-    UpdateCaseInfoRequest,
-    JudicialHearingReport,
-    CaseInformation,
-    HearingParties,
+    UpdateMeetingInfoRequest,
+    MeetingInfo,
     TranscriptSegment
 )
 from app.services.session_manager import session_manager
 from app.services.gemini_transcribe import gemini_final_transcriber
 from app.services.summarizer import meeting_summarizer
-from app.services.docx_exporter import generate_judicial_docx
 from app.config import settings, is_valid_session_id
 from google import genai
 from google.genai import types
@@ -156,9 +153,6 @@ async def process_complete_audio(
         )
         session_manager.set_summary(session_id, summary)
 
-        # Report generation is on-demand only (user clicks "Generate Report");
-        # uploaded audio still gets the full transcript + summary treatment.
-
         return session_manager.get(session_id)
     except Exception as e:
         session_manager.set_error(session_id, str(e))
@@ -250,19 +244,19 @@ async def ask_about_meeting(session_id: str, request: AskRequest):
             summary_text += "Actions: " + "; ".join(f"{a.task} ({a.assignee})" for a in session.summary.action_items) + "\n"
 
     if not settings.gemini_api_key:
-        suit_no = session.case_info.case_number if session.case_info else session_id
+        meeting_title = session.title or session_id
         return AskResponse(
-            answer=f"Based on the official proceedings record for {suit_no}, no additional information was recorded on this question.",
+            answer=f"Based on the transcript for \"{meeting_title}\", no additional information was recorded on this question.",
             evidence_segment_ids=_evidence_for(request.question, segments)
         )
 
     try:
         client = genai.Client(api_key=settings.gemini_api_key)
         prompt = (
-            f"You are the Chief Court Stenographer for the Sharia Court of Appeal of Jigawa State. Answer this question based STRICTLY on the official proceedings and transcript below.\n"
+            f"You are a factual meeting assistant. Answer this question based STRICTLY on the meeting summary and transcript below.\n"
             f"{summary_text}\nTranscript:\n{context}\n\n"
             f"Question: {request.question}\n"
-            f"Answer concisely in 1-2 clear sentences. If you cannot find the answer, state that it was not discussed during the proceedings."
+            f"Answer concisely in 1-2 clear sentences. If you cannot find the answer, state that it was not discussed during the meeting."
         )
         resp = await client.aio.models.generate_content(
             model=settings.gemini_summary_model,
@@ -273,121 +267,20 @@ async def ask_about_meeting(session_id: str, request: AskRequest):
     except Exception as e:
         return AskResponse(answer=f"Could not answer question: {str(e)}", evidence_segment_ids=[])
 
-@router.put("/{session_id}/case-info", response_model=SessionState)
-async def update_case_info(session_id: str, request: UpdateCaseInfoRequest):
-    """Updates case information and parties/counsel for a court hearing session."""
-    session = session_manager.update_case_info(session_id, request.case, request.parties)
+@router.put("/{session_id}/meeting-info", response_model=SessionState)
+async def update_meeting_info(session_id: str, request: UpdateMeetingInfoRequest):
+    """Updates user-provided meeting context (title, date, type, location, organizer, participants)."""
+    session = session_manager.update_meeting_info(session_id, request.meeting_info)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
-@router.post("/{session_id}/report", response_model=JudicialHearingReport)
-async def generate_report_endpoint(session_id: str):
-    """Generates the 12-section Judicial Hearing Report for a session, on demand.
-
-    This is the ONLY path that produces a report — nothing is auto-generated after
-    recording, upload, or on read. Concurrent generation for the same session is
-    rejected (409); regenerating an existing report is allowed.
-    """
-    session = session_manager.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if session.report_status == "generating":
-        raise HTTPException(
-            status_code=409,
-            detail="A report is already being generated for this session"
-        )
-
-    transcript_data = session.final_transcript
-    if not transcript_data or not transcript_data.segments:
-        # Fall back to live transcript segments if final is not present yet
-        segments = []
-        if session.live_transcript:
-            for idx, item in enumerate(session.live_transcript):
-                segments.append(
-                    TranscriptSegment(
-                        id=item.id or f"live_{idx}",
-                        start=idx * 5.0,
-                        end=(idx + 1) * 5.0,
-                        speaker=item.speaker_label or f"Speaker {idx % 2 + 1}",
-                        text=item.text
-                    )
-                )
-        if not segments:
-            session_manager.set_report_error(
-                session_id, "Nothing to report on: no transcript was captured for this session"
-            )
-            raise HTTPException(
-                status_code=409,
-                detail="No transcript available for this session. Record or upload audio first."
-            )
-        transcript_data = FinalTranscriptData(
-            language=session.language_mode or "en",
-            segments=segments
-        )
-
-    session_manager.set_report_generating(session_id)
-    try:
-        report = await meeting_summarizer.generate_hearing_report(
-            transcript_data=transcript_data,
-            case_info=session.case_info,
-            parties=session.parties
-        )
-    except Exception as e:
-        logger.exception(f"[{session_id}] Hearing report generation failed: {e}")
-        session_manager.set_report_error(session_id, str(e))
-        raise HTTPException(status_code=502, detail=f"Report generation failed: {str(e)}")
-
-    session_manager.set_hearing_report(session_id, report)
-    return report
-
-@router.get("/{session_id}/report", response_model=JudicialHearingReport)
-async def get_report_endpoint(session_id: str):
-    """Retrieves a previously generated Judicial Hearing Report (read-only).
-
-    Reports are never auto-generated here; clients use POST /report to create one.
-    """
-    session = session_manager.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if not session.hearing_report:
-        raise HTTPException(status_code=404, detail="Hearing report not yet generated")
-    return session.hearing_report
-
-@router.get("/{session_id}/export/docx")
-async def export_report_docx(session_id: str):
-    """Exports the complete Judicial Hearing Report as a formatted Microsoft Word (.docx) document."""
-    session = session_manager.get(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    report = session.hearing_report
-    if not report:
-        raise HTTPException(
-            status_code=404,
-            detail="Hearing report not generated yet. Generate it first, then export."
-        )
-
-    docx_buffer = generate_judicial_docx(report)
-    clean_suit = (report.case.case_number or session_id).replace("/", "_").replace(" ", "_")
-    filename = f"Hearing_Report_{clean_suit}.docx"
-
-    return Response(
-        content=docx_buffer.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
-    )
-
 @router.get("/{session_id}/export")
-async def export_session(session_id: str, format: str = Query("markdown", pattern="^(markdown|txt|json|docx)$")):
-    """Exports session transcript and summary in Markdown, TXT, JSON, or DOCX."""
+async def export_session(session_id: str, format: str = Query("markdown", pattern="^(markdown|txt|json)$")):
+    """Exports session transcript and summary in Markdown, TXT, or JSON."""
     session = session_manager.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    if format == "docx":
-        return await export_report_docx(session_id)
 
     if format == "json":
         return Response(

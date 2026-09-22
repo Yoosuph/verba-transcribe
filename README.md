@@ -1,4 +1,4 @@
-# Judiciary Jigawa — Real-Time Transcription & Grounded Summarization
+# Verba — Meeting Recording, Transcription & Summaries
 
 A production-quality MVP web application for **real-time audio transcription, speaker-aware final transcription, and transcript-grounded meeting summarization** powered by Google Gemini.
 
@@ -13,26 +13,24 @@ Designed to operate on **lightweight CPU-only infrastructure** (VPS/Docker) with
    - **Path B (Final Authoritative)**: When recording stops, the complete audio is transcribed using **Gemini Transcribe** (`gemini-3.5-transcribe` / fallback `gemini-3.8-flash`), providing **speaker diarization (up to 8 speakers)** and precise **word/utterance timestamps**.
 2. **Strictly Grounded Meeting Summaries**:
    - Summaries are synthesized using **ONLY** facts contained in the finalized transcript.
-   - Every decision and action item contains clickable **grounding evidence badges** (e.g., `[seg_4]`) that instantly jump and highlight the exact supporting transcript segment.
+   - Executive summary, key points, decisions, open questions, action items, and speaker contributions.
 3. **Bilingual & Code-Switching Support**:
    - Native support for **English**, **Hausa**, and **mixed English/Hausa code-switching**.
    - Original spoken language is strictly preserved without forced translation into English.
-   - Optional one-click **Translate to English** feature available post-recording.
 4. **Speaker Renaming & Management**:
-   - Speakers initially labeled as `Speaker 1`, `Speaker 2`, etc., can be renamed to human identities (e.g., `Speaker 1` → `Hon. Justice Yusuf`).
-   - Renaming updates across the entire transcript, action items assignees, and speaker contributions dynamically.
-5. **On-Demand Judicial Hearing Report (never auto-generated)**:
-   - The 12-section Judicial Hearing Report is produced **only** when the user explicitly clicks **Generate Report** (Report page, session detail view, or via `POST /api/sessions/{id}/report`).
-   - Nothing is generated automatically after recording stops, after upload, or on read — the user stays in full control of when (and whether) the costly synthesis runs.
-   - Session lifecycle states: `not_generated → generating → ready | error`; concurrent generation requests are rejected with `409`, and Word/PDF export stays locked until a report exists.
+   - Speakers initially labeled as `Speaker 1`, `Speaker 2`, etc., can be renamed to human identities.
+   - Renaming updates across the entire transcript, action item assignees, and speaker contributions dynamically.
+5. **Cross-Meeting Tracking**:
+   - A dedicated view aggregates decisions and action items across all recorded meetings with completion state.
 6. **Resilient Mid-Session Navigation**:
-   - Users can freely navigate to Proceedings, Summary, or the Report page **while recording continues** — the microphone and WebSocket stream keep running; the dock's Record tab pulses red and returns them to the live view.
-   - Starting a **New Hearing** while a session is active never silently kills the recording: a confirmation dialog offers *Back to Live Recording*, *Stop & Start New* (which stops + processes and saves the transcript first), or *Continue Current*.
-   - After processing completes the app stays on the Record view — the saved hearing card shows a *Generate Report* nudge instead of an auto-jump.
-7. **Modern Audio Pipeline & SaaS Interface**:
+   - Users can freely navigate between views **while recording continues** — the microphone and WebSocket stream keep running; the dock's Record tab pulses red and returns them to the live view.
+   - Starting a **New Meeting** while a session is active never silently kills the recording: a confirmation dialog offers to stop and start new, view meetings, or cancel.
+   - After processing completes the app stays on the Record view with the meeting saved to the library.
+7. **Modern Audio Pipeline & Interface**:
    - Web Audio API + `AudioWorklet` (`16kHz`, mono, `Int16` little endian).
    - Real-time 60fps canvas audio frequency visualizer and recording timer.
-   - Multi-format export: **Markdown Report**, **Plain Text**, and **Structured JSON**.
+   - Audio playback with variable speed and timestamp seek from the transcript.
+   - Multi-format export: **Markdown**, **Plain Text**, and **Structured JSON**.
 
 ---
 
@@ -92,7 +90,7 @@ GEMINI_FINAL_MODEL=gemini-3.5-transcribe
 GEMINI_SUMMARY_MODEL=gemini-3.8-flash
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
-> **Note**: If `GEMINI_API_KEY` is omitted, the application operates in resilient simulation mode with bilingual Hausa/English judicial scenarios for local testing.
+> **Note**: If `GEMINI_API_KEY` is omitted, the application operates in resilient simulation mode with sample meeting content for local testing.
 
 ---
 
@@ -148,18 +146,17 @@ npm test
 
 ## 📋 Manual Verification Checklist
 
-1. **Microphone Setup**: Click "Start Recording", grant microphone permission, verify audio visualizer bars react to voice.
+1. **Microphone Setup**: Click "New Meeting", configure the meeting details, grant microphone permission, verify audio visualizer bars react to voice.
 2. **Live English Speech**: Speak in English; verify interim text pulses and commits to the live transcript.
-3. **Live Hausa Speech**: Speak in Hausa (*"Barkan ku da warhaka, yau zamu tattauna batun tsarin aiki na kotu"*); verify orthography is preserved without English translation.
+3. **Live Hausa Speech**: Speak in Hausa (*"Barkan ku da warhaka, yau zamu tattauna batun tsarin aiki"*); verify orthography is preserved without English translation.
 4. **Code-Switching**: Mix English and Hausa in the same sentence; verify both languages appear faithfully.
-5. **Stop & Finalize**: Click "Stop & Finalize"; verify the 3 processing stages:
-   - `Final audio transcription`
-   - `Speaker diarization & timestamp alignment`
-   - `Grounded summarization`
+5. **Stop & Finalize**: Click "Stop Recording"; verify the 3 processing stages:
+   - `Transcribing audio`
+   - `Identifying speakers`
+   - `Generating summary`
 6. **Authoritative Reconciliation**: Verify that the final transcript with speaker labels replaces the live transcript view.
-7. **Speaker Renaming**: Click "Rename Speakers" or the edit icon next to `Speaker 1`, rename to a human name, and confirm updates across transcript segments, action item assignees, and speaker contributions.
-8. **Evidence Navigation**: Click any `[seg_X]` badge in Decisions or Action Items; confirm the view smoothly scrolls to that transcript segment and pulses with a highlight ring.
-9. **Export**: Click the "Export" button in the top header and download as Markdown, Plain Text, or JSON.
-10. **Mid-Session Navigation**: While recording, tap Proceedings / Summary / Report in the bottom dock; confirm the recording timer keeps advancing, the Record tab pulses red, and tapping it returns to the live view without losing audio.
-11. **New Hearing Guard**: While recording, tap "New Hearing"; confirm the warning dialog appears with *Back to Live Recording* / *Stop & Start New* / *Continue Current* options, and that "Stop & Start New" saves the transcript before opening the setup modal.
-12. **On-Demand Report**: After processing completes, confirm the app stays on the Record view; open the Report tab to see the "Generate Judicial Hearing Report" gate, click it, and verify the skeleton → full 12-section document. Confirm Word/PDF export is disabled until generation succeeds, and that "Regenerate" produces a fresh report.
+7. **Speaker Renaming**: Click the edit icon next to a speaker in the transcript, rename to a human name, and confirm updates across transcript segments, action item assignees, and speaker contributions.
+8. **Export**: Open a saved meeting, click "Export", and download as Markdown, Plain Text, or JSON.
+9. **Action Item Tracking**: Toggle action items in the Actions tab; confirm completion state persists across visits.
+10. **Mid-Session Navigation**: While recording, tap Meetings / Actions in the bottom dock; confirm the recording timer keeps advancing, the Record tab pulses red, and tapping it returns to the live view without losing audio.
+11. **New Meeting Guard**: While recording, tap "New Meeting"; confirm the warning dialog appears and that "Stop current session & start new" saves the transcript before opening the setup modal.

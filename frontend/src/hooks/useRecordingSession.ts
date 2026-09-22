@@ -283,7 +283,7 @@ export function useRecordingSession() {
     }, 3000);
   }, []);
 
-  const exportSession = useCallback(async (format: 'markdown' | 'txt' | 'json' | 'docx') => {
+  const exportSession = useCallback(async (format: 'markdown' | 'txt' | 'json') => {
     if (!sessionId) return;
     try {
       const res = await fetch(`/api/sessions/${sessionId}/export?format=${format}`);
@@ -296,7 +296,7 @@ export function useRecordingSession() {
       const a = document.createElement('a');
       a.href = url;
       const ext = format === 'markdown' ? 'md' : format;
-      a.download = `hearing_${sessionId}.${ext}`;
+      a.download = `meeting_${sessionId}.${ext}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

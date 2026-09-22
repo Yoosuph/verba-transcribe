@@ -1,198 +1,182 @@
 import React from 'react';
-import { ChevronLeft, Gavel, Calendar, Clock, Scale, ArrowRight, Plus } from 'lucide-react';
+import {
+  ChevronLeft,
+  BadgeCheck,
+  ListChecks,
+  Calendar,
+  CheckCircle2,
+  ArrowRight,
+  User,
+  Inbox,
+} from 'lucide-react';
 import type { SessionState } from '../../types/transcription';
-import { JudiciaryLogo } from '../common/JudiciaryLogo';
 
 interface GlobalActionsViewProps {
   sessions: SessionState[];
   onBack: () => void;
   onSelectMeeting: (session: SessionState) => void;
-  onStartHearing?: () => void;
+  onStartRecord?: () => void;
+}
+
+interface AggregatedItem {
+  id: string;
+  kind: 'decision' | 'action';
+  text: string;
+  meetingTitle: string;
+  meetingDate?: string;
+  sessionObj: SessionState;
+  completed?: boolean;
+  assignee?: string;
 }
 
 export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
   sessions,
   onBack,
   onSelectMeeting,
-  onStartHearing,
+  onStartRecord,
 }) => {
-  // Aggregate real judicial orders from all sessions
-  const ordersList: Array<{
-    orderText: string;
-    caseNumber: string;
-    court: string;
-    judge: string;
-    division: string;
-    hearingDate: string;
-    adjournment?: { date: string; time: string; purpose: string };
-    sessionObj: SessionState;
-  }> = [];
-
+  // Aggregate decisions and action items across all sessions
+  const items: AggregatedItem[] = [];
   sessions.forEach((s) => {
-    const caseNum = s.case_info?.case_number || 'JGS/SCA/DTS/CV/018/2026';
-    const courtName = s.case_info?.court || 'Sharia Court of Appeal of Jigawa State';
-    const judgeName = s.case_info?.judge || 'Hon. Kadi Sani Salihu (Hon. Grand Kadi)';
-    const divisionName = s.case_info?.division || 'Dutse Judicial Division';
-    const hearingDt = s.case_info?.hearing_date || s.started_at || '21 September 2026';
+    const meetingTitle = s.title || s.meeting_info?.title || 'Untitled Meeting';
+    const meetingDate = s.meeting_info?.meeting_date || s.started_at;
 
-    if (s.hearing_report && s.hearing_report.orders && s.hearing_report.orders.length > 0) {
-      s.hearing_report.orders.forEach((ord) => {
-        ordersList.push({
-          orderText: ord.order,
-          caseNumber: caseNum,
-          court: courtName,
-          judge: judgeName,
-          division: divisionName,
-          hearingDate: hearingDt,
-          adjournment: s.hearing_report?.next_hearing,
-          sessionObj: s,
-        });
+    s.summary?.decisions?.forEach((d) => {
+      items.push({
+        id: `${s.id}-decision-${d.id}`,
+        kind: 'decision',
+        text: d.decision,
+        meetingTitle,
+        meetingDate,
+        sessionObj: s,
       });
-    } else if (s.summary?.decisions && s.summary.decisions.length > 0) {
-      s.summary.decisions.forEach((d) => {
-        ordersList.push({
-          orderText: d.decision,
-          caseNumber: caseNum,
-          court: courtName,
-          judge: judgeName,
-          division: divisionName,
-          hearingDate: hearingDt,
-          adjournment: undefined,
-          sessionObj: s,
-        });
+    });
+
+    s.summary?.action_items?.forEach((a) => {
+      items.push({
+        id: `${s.id}-action-${a.id}`,
+        kind: 'action',
+        text: a.task,
+        meetingTitle,
+        meetingDate,
+        sessionObj: s,
+        completed: a.completed,
+        assignee: a.assignee,
       });
-    }
+    });
   });
+
+  const openActions = items.filter((i) => i.kind === 'action' && !i.completed).length;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-[#F8FAF9] text-slate-900 overflow-hidden relative select-none">
-      {/* Top Header Control Strip */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 sm:px-6 pt-3 pb-3 border-b border-slate-200/80 flex-shrink-0 bg-white/90 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
             className="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 active:scale-[0.98] transition-all flex items-center justify-center text-slate-700 shadow-xs cursor-pointer"
-            title="Back to Cause Docket"
+            title="Back to all meetings"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#008751] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
-              Judicial Archive · Sharia Court of Appeal
+              Across All Meetings
             </span>
             <h1 className="text-sm sm:text-base font-black text-slate-900 tracking-tight leading-tight mt-0.5">
-              Court Orders & Decrees (Hukuncin Kotu)
+              Decisions &amp; Action Items
             </h1>
           </div>
         </div>
 
         <div className="text-right">
-          <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-            {ordersList.length} {ordersList.length === 1 ? 'Order' : 'Orders'} Enforceable
-          </span>
+          <div className="text-xl font-black text-[#008751] leading-none">{items.length}</div>
+          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+            {openActions > 0 ? `${openActions} open` : 'All clear'}
+          </div>
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 pb-32">
-        {ordersList.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200/90 p-8 text-center max-w-md mx-auto space-y-4 shadow-[0_1px_3px_rgba(0,0,0,0.03)] my-8">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-[#008751] mx-auto shadow-xs">
-              <JudiciaryLogo size="sm" variant="crest" lightMode={true} />
+      {/* List */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 pb-28 space-y-3">
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mb-4 shadow-xs">
+              <Inbox className="w-6 h-6 text-slate-300" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-slate-900">
-                No Judicial Orders on Record Yet
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-                When a hearing is transcribed or synthesized, all enforceable pronouncements
-                (Hukunci) and adjournment dates will automatically be catalogued here.
-              </p>
-            </div>
-
-            {onStartHearing && (
-              <div className="pt-2">
-                <button
-                  onClick={onStartHearing}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#008751] hover:bg-[#007345] active:scale-[0.98] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Start New Hearing</span>
-                </button>
-              </div>
+            <p className="text-sm font-bold text-slate-800">Nothing tracked yet</p>
+            <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+              Decisions and action items extracted from your meetings will appear here.
+            </p>
+            {onStartRecord && (
+              <button
+                onClick={onStartRecord}
+                className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
+              >
+                Record a Meeting
+              </button>
             )}
           </div>
         ) : (
-          ordersList.map((item, idx) => (
+          items.map((item) => (
             <article
-              key={idx}
-              className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:border-emerald-300 transition-all space-y-3.5"
+              key={item.id}
+              className="p-4 rounded-2xl bg-white border border-slate-200/90 shadow-[0_1px_3px_rgba(0,0,0,0.03)] space-y-3"
             >
-              {/* Header: Court, Division, Suit Number & Date */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-[#008751] flex items-center justify-center font-bold border border-emerald-200/60 flex-shrink-0">
-                    <Gavel className="w-4 h-4" />
+                  <div
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold border flex-shrink-0 ${
+                      item.kind === 'decision'
+                        ? 'bg-emerald-50 text-[#008751] border-emerald-200/60'
+                        : 'bg-amber-50 text-amber-700 border-amber-200/60'
+                    }`}
+                  >
+                    {item.kind === 'decision' ? <BadgeCheck className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-black text-slate-900">
-                        {item.caseNumber}
-                      </span>
-                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200/60">
-                        {item.division}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      {item.court} · {item.judge}
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                        item.kind === 'decision'
+                          ? 'text-emerald-800 bg-emerald-50 border-emerald-200/60'
+                          : 'text-amber-800 bg-amber-50 border-amber-200/60'
+                      }`}
+                    >
+                      {item.kind === 'decision' ? 'Decision' : 'Action Item'}
                     </span>
+                    <span className="text-[11px] text-slate-500 font-medium ml-2">{item.meetingTitle}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 self-start sm:self-auto text-xs font-medium text-slate-500">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{item.hearingDate}</span>
+                <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                  {item.assignee && (
+                    <span className="inline-flex items-center gap-1">
+                      <User className="w-3 h-3 text-slate-400" /> {item.assignee}
+                    </span>
+                  )}
+                  {item.completed && (
+                    <span className="inline-flex items-center gap-1 text-[#008751] font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Done
+                    </span>
+                  )}
+                  {item.meetingDate && (
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" /> {item.meetingDate}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Order Body in Prestigious Dark Forest Box */}
-              <div className="p-4 rounded-xl bg-[#082E20] text-white space-y-1.5 shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-                    Enforceable Court Directive (Hukunci #{idx + 1})
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-200/60">
-                    Binding on Litigants
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm font-semibold leading-relaxed text-white">
-                  {item.orderText}
-                </p>
-              </div>
+              <p className="text-xs sm:text-sm font-semibold text-slate-800 leading-relaxed">{item.text}</p>
 
-              {/* Adjournment info if present */}
-              {item.adjournment && item.adjournment.date && (
-                <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 text-xs flex items-center gap-2 text-amber-950 font-medium">
-                  <Clock className="w-4 h-4 text-amber-800 flex-shrink-0" />
-                  <span>
-                    Adjourned to <strong className="font-bold">{item.adjournment.date}</strong> at{' '}
-                    <strong>{item.adjournment.time}</strong> for {item.adjournment.purpose}
-                  </span>
-                </div>
-              )}
-
-              {/* Footer action */}
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-slate-400 italic">
-                  Certified from recorded hearing proceedings
-                </span>
+              <div className="flex items-center justify-end pt-1">
                 <button
                   onClick={() => onSelectMeeting(item.sessionObj)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#008751] active:scale-[0.98] text-xs font-bold transition-all cursor-pointer border border-emerald-200/80 shadow-xs"
                 >
-                  <Scale className="w-3.5 h-3.5" />
-                  <span>View Full Report</span>
-                  <ArrowRight className="w-3 h-3 ml-0.5" />
+                  Open Meeting
+                  <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
             </article>

@@ -163,5 +163,5 @@ def test_session_manager_concurrent_mutations_do_not_corrupt():
 # 4. Config / deployment alignment
 # ---------------------------------------------------------------------------
 def test_temp_audio_dir_matches_docker_compose_volume():
-    """Backend default temp dir must match the /tmp/judiciary_audio volume in docker-compose.yml."""
-    assert settings.temp_audio_dir == "/tmp/judiciary_audio"
+    """Backend default temp dir must match the /tmp/meeting_audio volume in docker-compose.yml."""
+    assert settings.temp_audio_dir == "/tmp/meeting_audio"

@@ -55,18 +55,12 @@
   animation: cursor-blink 0.8s infinite;
 }
 
-/* Nigerian Judiciary Emerald & Gold Glow */
+/* Brand Emerald Glow */
 .green-glow {
   box-shadow: 0 10px 25px -5px rgba(0, 135, 81, 0.35), 0 8px 10px -6px rgba(0, 135, 81, 0.2);
 }
 
-.judicial-gold-glow {
-  box-shadow: 0 8px 20px -4px rgba(217, 119, 6, 0.3);
-}
 
-.nigerian-tricolor {
-  background: linear-gradient(90deg, #008751 0%, #008751 33.33%, #FFFFFF 33.33%, #FFFFFF 66.66%, #008751 66.66%, #008751 100%);
-}
 
 /* Focus visibility for keyboard users */
 :focus-visible {
@@ -165,7 +159,7 @@
   will-change: transform, opacity;
 }
 
-/* Print styles for judicial hearing report export */
+/* Print styles for report export */
 @media print {
   body {
     background-color: #FFFFFF !important;
@@ -178,7 +172,7 @@
     size: A4;
     margin: 14mm 14mm 14mm 14mm;
   }
-  article#judicial-hearing-report {
+  article#meeting-report {
     max-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;

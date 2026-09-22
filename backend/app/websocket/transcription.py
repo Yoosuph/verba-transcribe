@@ -167,9 +167,7 @@ async def websocket_transcription_endpoint(websocket: WebSocket, session_id: str
                 "message": f"Summarization failed: {str(e)}"
             })
 
-        # Judicial hearing report is intentionally NOT auto-generated here.
-        # Reports are produced on demand when the user clicks "Generate Report"
-        # (POST /api/sessions/{id}/report), keeping post-recording processing fast.
+        # Only the fast post-recording pipeline (transcript + summary) runs here.
         if limit_hit:
             await safe_send({
                 "type": "session_limit",
