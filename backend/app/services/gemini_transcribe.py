@@ -5,6 +5,7 @@ from google import genai
 from google.genai import types
 from app.config import settings
 from app.models.transcription import FinalTranscriptData, TranscriptSegment
+from app.services.gemini_retry import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,11 @@ Instructions:
 5. Structured JSON Output: Return valid JSON adhering strictly to the schema.
 """
 
+# Cap on live-transcript text injected into prompts (defense against unbounded
+# prompt growth and a basic prompt-injection surface).
+MAX_GUIDANCE_CHARS = 20_000
+
+
 class GeminiFinalTranscriber:
     """Performs post-recording audio transcription with speaker diarization and timestamps."""
 
@@ -27,33 +33,57 @@ class GeminiFinalTranscriber:
     def _api_key(self) -> str:
         return settings.gemini_api_key
 
+    def _audio_part(
+        self,
+        audio_part: Optional[types.Part],
+        wav_bytes: Optional[bytes],
+        wav_path: Optional[str],
+    ) -> types.Part:
+        """Prefers a pre-uploaded Files API part; falls back to inline bytes or a path read."""
+        if audio_part is not None:
+            return audio_part
+        if wav_path:
+            return types.Part.from_bytes(data=open(wav_path, "rb").read(), mime_type="audio/wav")
+        if wav_bytes:
+            return types.Part.from_bytes(data=wav_bytes, mime_type="audio/wav")
+        raise ValueError("No audio provided for transcription")
+
     async def transcribe_audio(
         self,
-        wav_bytes: bytes,
+        wav_bytes: Optional[bytes] = None,
         language_mode: str = "auto",
-        live_transcript_text: Optional[str] = None
+        live_transcript_text: Optional[str] = None,
+        audio_part: Optional[types.Part] = None,
+        wav_path: Optional[str] = None,
     ) -> FinalTranscriptData:
         """
         Diarizes and timestamps the meeting by combining the complete audio recording
         with the verified real-time live transcript.
+
+        `audio_part` (a Files API part) is preferred so the recording is uploaded
+        once and reused across the raw-transcribe and structuring calls.
         """
         if not self._api_key:
             if settings.mock_mode_if_no_key:
                 logger.info("No GEMINI_API_KEY. Using simulated diarization.")
-                return self._generate_simulated_final_transcript(language_mode, live_transcript_text)
+                return self.segment_live_transcript(language_mode, live_transcript_text)
             else:
                 raise ValueError("GEMINI_API_KEY is not configured in backend/.env")
 
         client = genai.Client(api_key=self._api_key)
-        audio_part = types.Part.from_bytes(data=wav_bytes, mime_type="audio/wav")
+        audio = self._audio_part(audio_part, wav_bytes, wav_path)
 
         # Dedicated transcription model produces the raw verbatim text;
         # the capable summary model structures it into diarized JSON segments.
         raw_models = [settings.gemini_final_model] + settings.gemini_final_fallback_models
         structure_models = [settings.gemini_summary_model] + settings.gemini_summary_fallback_models
 
-        if live_transcript_text and live_transcript_text.strip():
-            logger.info(f"Injecting verified live transcript ({len(live_transcript_text)} chars) to guide speaker diarization.")
+        guidance = (live_transcript_text or "").strip()
+        if len(guidance) > MAX_GUIDANCE_CHARS:
+            guidance = guidance[:MAX_GUIDANCE_CHARS]
+
+        if guidance:
+            logger.info(f"Injecting verified live transcript ({len(guidance)} chars) to guide speaker diarization.")
             alignment_instructions = (
                 f"1. Align the verbatim words in the VERIFIED REAL-TIME LIVE TRANSCRIPT below with the accompanying audio recording.\n"
                 f"2. Separate utterances by speaker ('Speaker 1', 'Speaker 2', etc.).\n"
@@ -61,7 +91,7 @@ class GeminiFinalTranscriber:
                 f"4. Detect language per segment ('ha-NG', 'en-US', or 'mixed').\n"
                 f"5. Return valid JSON adhering to the FinalTranscriptData schema.\n\n"
                 f"=== VERIFIED REAL-TIME LIVE TRANSCRIPT ===\n"
-                f"{live_transcript_text.strip()}\n"
+                f"{guidance}\n"
                 f"=== END LIVE TRANSCRIPT ==="
             )
         else:
@@ -84,9 +114,11 @@ class GeminiFinalTranscriber:
         for model_name in raw_models:
             try:
                 logger.info(f"Attempting raw transcription with model: {model_name}")
-                transcribe_resp = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=[audio_part, "Transcribe the spoken words in this audio accurately, including speaker labels if distinguishable."]
+                transcribe_resp = await call_with_retry(
+                    lambda: client.aio.models.generate_content(
+                        model=model_name,
+                        contents=[audio, "Transcribe the spoken words in this audio accurately, including speaker labels if distinguishable."],
+                    )
                 )
                 if transcribe_resp and transcribe_resp.text and transcribe_resp.text.strip():
                     raw_text = transcribe_resp.text.strip()
@@ -95,6 +127,7 @@ class GeminiFinalTranscriber:
                 logger.warning(f"Raw transcription failed with model {model_name}: {e}")
 
         # Pass 2: structure into diarized JSON segments with the capable model
+        last_error: Optional[Exception] = None
         for model_name in structure_models:
             try:
                 logger.info(f"Structuring diarized transcript with model: {model_name}")
@@ -110,29 +143,40 @@ class GeminiFinalTranscriber:
                     response_schema=FinalTranscriptData,
                     temperature=0.1
                 )
-                response = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=[audio_part, prompt],
-                    config=config
+                response = await call_with_retry(
+                    lambda: client.aio.models.generate_content(
+                        model=model_name,
+                        contents=[audio, prompt],
+                        config=config,
+                    )
                 )
                 if response and response.text:
                     parsed_data = json.loads(response.text)
                     return FinalTranscriptData(**parsed_data)
             except Exception as e:
+                last_error = e
                 logger.warning(f"Final transcription failed with model {model_name}: {e}")
 
-        if settings.mock_mode_if_no_key and not self._api_key:
+        if not self._api_key and settings.mock_mode_if_no_key:
             logger.info("Using segmented live transcript fallback for diarization.")
-            return self._generate_simulated_final_transcript(language_mode, live_transcript_text)
+            return self.segment_live_transcript(language_mode, live_transcript_text)
 
-        raise RuntimeError("Failed to generate final transcript with configured Gemini models.")
+        # Key is present: never fabricate a transcript — fail loudly.
+        raise RuntimeError(
+            f"Failed to generate final transcript with configured Gemini models: {last_error}"
+        )
 
-    def _generate_simulated_final_transcript(
+    def segment_live_transcript(
         self,
         language_mode: str,
-        live_transcript_text: Optional[str] = None
+        live_transcript_text: Optional[str] = None,
     ) -> FinalTranscriptData:
-        """Fallback simulation for testing or offline demonstration."""
+        """Segments the verified live transcript into diarized segments.
+
+        Used when no API key is configured (mock mode) AND as a graceful
+        degradation when final transcription fails but live speech was
+        captured — the words are the user's own, nothing is invented.
+        """
         if live_transcript_text and live_transcript_text.strip():
             # Segment the user's actual live transcript into diarized segments
             sentences = [s.strip() for s in live_transcript_text.replace('\n', ' ').split('.') if s.strip()]

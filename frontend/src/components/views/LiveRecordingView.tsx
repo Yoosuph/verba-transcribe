@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
-  MoreHorizontal,
   Bookmark,
   Pause,
   Play,
   Loader2,
+  CheckCircle2,
+  FileText,
+  ListChecks,
+  Sparkles,
 } from 'lucide-react';
-import { VerbaLogo } from '../common/VerbaLogo';
-import type { LiveTranscriptItem, ProcessingStage } from '../../types/transcription';
+import { BrandLogo } from '../common/BrandLogo';
+import type { LiveTranscriptItem, ProcessingStage, MeetingSummary } from '../../types/transcription';
 
 interface LiveRecordingViewProps {
   title?: string;
@@ -18,13 +21,16 @@ interface LiveRecordingViewProps {
   analyserNode: AnalyserNode | null;
   isPaused: boolean;
   isProcessing?: boolean;
+  isComplete?: boolean;
+  summary?: MeetingSummary | null;
   processingStage?: ProcessingStage;
   errorMessage?: string | null;
   onPause: () => void;
   onResume: () => void;
   onMinimize: () => void;
   onStop: () => void;
-  onViewTranscript?: () => void;
+  onOpenRecord?: () => void;
+  onStartRecord?: () => void;
   languageMode?: string;
 }
 
@@ -36,13 +42,16 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
   analyserNode,
   isPaused,
   isProcessing = false,
+  isComplete = false,
+  summary = null,
   processingStage = null,
   errorMessage = null,
   onPause,
   onResume,
   onMinimize,
   onStop,
-  onViewTranscript,
+  onOpenRecord,
+  onStartRecord,
   languageMode = 'auto',
 }) => {
   const [bookmarks, setBookmarks] = useState<number[]>([]);
@@ -132,7 +141,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
     }
   }, [liveTranscript, interimText]);
 
-  const showProcessingScreen = isProcessing || localStopping;
+  const showProcessingScreen = (isProcessing || localStopping) && !isComplete;
   const hasContent = liveTranscript.length > 0 || interimText;
 
   // Calculate total words spoken in this session
@@ -156,6 +165,113 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
     { id: 'summarization', label: 'Generating summary' },
   ] as const;
   const stageIndex = processingStage === 'summarization' ? 2 : processingStage === 'speaker_diarization' ? 1 : 0;
+
+  // ================= 0. COMPLETION SCREEN =================
+  if (isComplete) {
+    return (
+      <div className="flex-1 flex flex-col bg-[#F8FAF9] text-slate-900 justify-between p-6 select-none relative overflow-hidden">
+        {/* Top status pill */}
+        <div className="flex items-center justify-between pt-2 flex-shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200">
+            <CheckCircle2 className="w-3.5 h-3.5 text-[#008751]" />
+            <span>Saved to your library</span>
+          </div>
+          <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+            <span>{formatTime(recordingSeconds)}</span>
+            {totalWords > 0 && <span>· {totalWords} words</span>}
+          </div>
+        </div>
+
+        {/* Center: success + live summary preview */}
+        <div className="my-auto flex flex-col items-center text-center max-w-sm mx-auto space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-200/80 shadow-xs flex items-center justify-center text-[#008751]">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Meeting Ready</h2>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-xs">
+              Your transcript, summary, and audio replay are available now.
+            </p>
+          </div>
+
+          {/* Summary preview — fills in live if it arrives a beat late */}
+          <div className="w-full bg-white rounded-2xl border border-slate-200/90 p-4 text-left shadow-[0_1px_3px_rgba(0,0,0,0.03)] space-y-3">
+            {summary ? (
+              <>
+                <div className="flex items-center gap-1.5 text-[#008751]">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-black uppercase tracking-wider">
+                    Executive Summary
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed line-clamp-4">
+                  {summary.executive_summary}
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100">
+                  {summary.key_points.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-[10px] font-bold text-emerald-800">
+                      <FileText className="w-2.5 h-2.5" />
+                      {summary.key_points.length} Key Points
+                    </span>
+                  )}
+                  {summary.decisions.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-[10px] font-bold text-emerald-800">
+                      <CheckCircle2 className="w-2.5 h-2.5" />
+                      {summary.decisions.length} Decisions
+                    </span>
+                  )}
+                  {summary.action_items.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/70 text-[10px] font-bold text-emerald-800">
+                      <ListChecks className="w-2.5 h-2.5" />
+                      {summary.action_items.length} Actions
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-slate-500 py-1">
+                <Loader2 className="w-3.5 h-3.5 text-[#008751] animate-spin flex-shrink-0" />
+                <span>Finalizing summary — it will appear here in a moment…</span>
+              </div>
+            )}
+          </div>
+
+          {/* Primary actions */}
+          <div className="w-full space-y-2">
+            {onOpenRecord && (
+              <button
+                onClick={onOpenRecord}
+                className="w-full px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-md shadow-emerald-700/20 active:scale-[0.99] transition-all cursor-pointer"
+              >
+                Open Meeting Record
+              </button>
+            )}
+            {onStartRecord && (
+              <button
+                onClick={onStartRecord}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold active:scale-[0.99] transition-all cursor-pointer"
+              >
+                Record Another Meeting
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Quiet footer */}
+        <div className="pt-2 pb-2 flex-shrink-0 text-center">
+          {onMinimize && (
+            <button
+              onClick={onMinimize}
+              className="text-xs text-slate-500 hover:text-slate-800 transition-colors font-medium hover:underline underline-offset-4 cursor-pointer"
+            >
+              Back to all meetings
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ================= 1. DEDICATED PROCESSING & COMPLETION SCREEN =================
   if (showProcessingScreen) {
@@ -186,7 +302,7 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
           {/* Minimal Crest Tile */}
           <div className="relative flex items-center justify-center">
             <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200/80 shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex items-center justify-center">
-              <VerbaLogo size="sm" variant="icon" lightMode={true} />
+              <BrandLogo size="sm" variant="icon" lightMode={true} />
             </div>
             <div className="absolute -inset-2 rounded-3xl border border-emerald-500/20 animate-pulse pointer-events-none" />
           </div>
@@ -240,16 +356,17 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
 
         {/* Minimal Quiet Footer */}
         <div className="pt-2 pb-2 flex-shrink-0 flex flex-col items-center gap-2">
-          {onViewTranscript && (
+          {onMinimize && (
             <button
-              onClick={onViewTranscript}
-              className="text-xs text-slate-500 hover:text-slate-800 transition-colors font-medium hover:underline underline-offset-4 cursor-pointer"
+              onClick={onMinimize}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
             >
-              View Live Transcript
+              <ChevronDown className="w-3.5 h-3.5" />
+              <span>Back to Meetings</span>
             </button>
           )}
-          <span className="text-[11px] text-slate-400">
-            Summary will open automatically once finalized
+          <span className="text-[11px] text-slate-400 text-center max-w-xs">
+            Processing continues in the background — this page updates live.
           </span>
         </div>
       </div>
@@ -264,15 +381,16 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
         <button
           onClick={onMinimize}
           aria-label="Minimize to meetings, recording continues"
-          className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white min-w-[44px]"
-          title="Minimize to Meetings list"
+          className="h-11 px-4 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center gap-1.5 text-white"
+          title="Minimize to Meetings list (recording continues)"
         >
           <ChevronDown className="w-5 h-5" />
+          <span className="text-xs font-bold">Meetings</span>
         </button>
 
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-1.5">
-            <VerbaLogo size="sm" variant="icon" lightMode={true} />
+            <BrandLogo size="sm" variant="icon" lightMode={true} />
             <span className="text-sm font-bold text-white/95 truncate max-w-[200px]">
               {title}
             </span>
@@ -289,9 +407,8 @@ export const LiveRecordingView: React.FC<LiveRecordingViewProps> = ({
           </div>
         </div>
 
-        <button aria-label="More options (coming soon)" className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 active:scale-95 transition-all flex items-center justify-center text-white min-w-[44px]">
-          <MoreHorizontal className="w-5 h-5" />
-        </button>
+        {/* Spacer to keep the title optically centered */}
+        <div className="w-11 h-11" aria-hidden="true" />
       </div>
 
       {/* Real Elapsed Timer */}

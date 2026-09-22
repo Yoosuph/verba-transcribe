@@ -12,6 +12,8 @@ from app.models.transcription import (
     ActionItem,
     SpeakerContribution,
 )
+from app.services.gemini_transcribe import MAX_GUIDANCE_CHARS
+from app.services.gemini_retry import call_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ If information is uncertain or ambiguous, explicitly mark it as uncertain.
 Preserve important Hausa expressions and names accurately.
 
 Return structured JSON according to the schema.
-Ensure EVERY decision and action item includes the exact 'evidence_segment_ids' corresponding to the segment IDs (e.g. 'seg_1', 'seg_4') from the input transcript that support it.
+Ensure EVERY decision and action item includes the exact 'evidence_segment_ids' corresponding to the segment IDs (e.g. 'seg_1', 'seg_4') from the input transcript that support each claim.
 """
 
 class MeetingSummarizer:
@@ -42,11 +44,16 @@ class MeetingSummarizer:
         self,
         transcript_data: FinalTranscriptData,
         audio_wav_bytes: Optional[bytes] = None,
-        live_transcript_text: Optional[str] = None
+        live_transcript_text: Optional[str] = None,
+        audio_part: Optional[types.Part] = None,
+        agenda: Optional[str] = None,
     ) -> MeetingSummary:
         """
-        Sends the finalized transcript — plus the COMPLETE recording when available —
-        to the configured capable model to produce an audio-grounded summary.
+        Grounds the summary in the finalized transcript. When available, the
+        already-uploaded audio part is included so ambiguous passages can be
+        cross-checked against the recording (single upload, reused).
+        When an agenda is provided it structures the summary WITHOUT inventing
+        content that is absent from the transcript.
         """
         if not self._api_key:
             if settings.mock_mode_if_no_key:
@@ -69,15 +76,28 @@ class MeetingSummarizer:
             f"Generate a strictly grounded summary with evidence segment IDs referencing the [seg_X] tags above."
         )
         if live_transcript_text and live_transcript_text.strip():
+            guidance = live_transcript_text.strip()[:MAX_GUIDANCE_CHARS]
             user_content += (
                 f"\n\n=== VERIFIED REAL-TIME LIVE TRANSCRIPT (cross-check) ===\n"
-                f"{live_transcript_text.strip()}\n"
+                f"{guidance}\n"
                 f"=== END LIVE TRANSCRIPT ==="
+            )
+        if agenda and agenda.strip():
+            user_content += (
+                f"\n\n=== MEETING AGENDA (structure the summary against these items "
+                f"ONLY where the transcript covers them; never invent coverage) ===\n"
+                f"{agenda.strip()[:4000]}\n"
+                f"=== END AGENDA ==="
             )
 
         client = genai.Client(api_key=self._api_key)
         models_to_try = [settings.gemini_summary_model] + settings.gemini_summary_fallback_models
 
+        audio_part_obj = audio_part
+        if audio_part_obj is None and audio_wav_bytes:
+            audio_part_obj = types.Part.from_bytes(data=audio_wav_bytes, mime_type="audio/wav")
+
+        last_error: Optional[Exception] = None
         for model_name in models_to_try:
             try:
                 logger.info(f"Generating summary with model: {model_name}")
@@ -91,14 +111,16 @@ class MeetingSummarizer:
                 # Ground the summary in BOTH the transcript and the full recording:
                 # audio resolves ambiguous or mistranscribed passages.
                 contents = (
-                    [types.Part.from_bytes(data=audio_wav_bytes, mime_type="audio/wav"), user_content]
-                    if audio_wav_bytes else user_content
+                    [audio_part_obj, user_content]
+                    if audio_part_obj else user_content
                 )
 
-                response = await client.aio.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=config
+                response = await call_with_retry(
+                    lambda: client.aio.models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                        config=config,
+                    )
                 )
 
                 if response and response.text:
@@ -113,13 +135,24 @@ class MeetingSummarizer:
                             a.id = f"act_{idx + 1}"
                     return summary
             except Exception as e:
+                last_error = e
                 logger.warning(f"Summary generation failed with model {model_name}: {e}")
 
-        logger.info("Falling back to transcript-grounded summary extraction.")
+        # API key is present: never silently substitute a fabricated summary.
+        raise RuntimeError(f"Summary generation failed with all configured models: {last_error}")
+
+    def grounded_fallback_summary(self, transcript_data: FinalTranscriptData) -> MeetingSummary:
+        """Transcript-grounded summary built only from real transcript text.
+
+        Used when every model call fails (e.g. sustained 503s) so the meeting
+        still completes with a usable, evidence-linked summary instead of
+        erroring out. Content is extracted verbatim from the transcript.
+        """
+        logger.warning("Using transcript-grounded fallback summary (model calls failed).")
         return self._generate_simulated_summary(transcript_data)
 
     def _generate_simulated_summary(self, transcript_data: FinalTranscriptData) -> MeetingSummary:
-        """Transcript-grounded fallback extraction strictly from the user's spoken words."""
+        """Transcript-grounded fallback extraction — only when no API key is configured."""
         if not transcript_data or not transcript_data.segments:
             return MeetingSummary(
                 executive_summary="No spoken dialogue was detected in this recording.",
@@ -144,7 +177,7 @@ class MeetingSummarizer:
         action_items = []
         decision_pattern = re.compile(r"\b(decide[sd]?|agreed?|resolved?|approved?|mun\s+amince|hukunci|zamu)\b")
         action_pattern = re.compile(r"\b(will|must|should|need\s+to|action|task|zan|zaki|zaka|aikin)\b")
-        for idx, seg in enumerate(transcript_data.segments):
+        for seg in transcript_data.segments:
             lower = seg.text.lower()
             if decision_pattern.search(lower):
                 decisions.append(
@@ -187,13 +220,6 @@ class MeetingSummarizer:
             questions=[],
             speaker_contributions=speaker_contributions
         )
-
-    def _format_seconds(self, seconds: float) -> str:
-        """Formats seconds to HH:MM:SS."""
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        s = int(seconds % 60)
-        return f"{h:02d}:{m:02d}:{s:02d}"
 
 
 meeting_summarizer = MeetingSummarizer()

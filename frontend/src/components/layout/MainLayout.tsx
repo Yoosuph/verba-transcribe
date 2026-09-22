@@ -1,28 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PhoneFrame } from '../phone/PhoneFrame';
-import { ButtonPlate, type AppPage } from './ButtonPlate';
+import { ButtonPlate } from './ButtonPlate';
 
 import { MeetingsListView } from '../views/MeetingsListView';
 import { LiveRecordingView } from '../views/LiveRecordingView';
 import { MeetingDetailView } from '../views/MeetingDetailView';
 import { GlobalActionsView } from '../views/GlobalActionsView';
 import { useRecordingSession } from '../../hooks/useRecordingSession';
-import type { SessionState, MeetingSummary } from '../../types/transcription';
-import { FileText, Plus, AlertTriangle } from 'lucide-react';
-import { VerbaLogo } from '../common/VerbaLogo';
-
-const LOCAL_STORAGE_KEY = 'verba_meetings_v1';
-
-const PAGE_ORDER: Record<string, number> = {
-  meetings: 0,
-  transcript: 1,
-  summary: 1,
-  actions: 2,
-  live: 3,
-};
-
-const todayString = () =>
-  new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+import { usePageNavigation } from '../../hooks/usePageNavigation';
+import { useMeetingsStore } from '../../hooks/useMeetingsStore';
+import type { LanguageMode, MeetingSummary } from '../../types/transcription';
+import type { SessionPatch } from '../../services/api';
+import { isShareMode } from '../../services/auth';
+import { deriveTitleFromSummary, defaultMeetingTitle } from '../../utils/title';
+import { Plus, AlertTriangle, FileText, Eye, X } from 'lucide-react';
+import { BrandLogo } from '../common/BrandLogo';
 
 export const MainLayout: React.FC = () => {
   const {
@@ -42,157 +34,186 @@ export const MainLayout: React.FC = () => {
     pauseRecording,
     resumeRecording,
     stopSession,
-    toggleActionItem,
-    renameSpeaker,
-    exportSession,
   } = useRecordingSession();
 
-  // Active page state for universal navigation
-  const [activePage, setActivePage] = useState<AppPage>('meetings');
-  const [navDirection, setNavDirection] = useState<'forward' | 'backward' | 'up' | 'fade'>('fade');
+  const {
+    sessions,
+    selectedSession,
+    setSelectedSession,
+    effectiveSession,
+    upsertSession,
+    renameSession,
+    removeSession,
+    refreshSessions,
+    loadSessionById,
+  } = useMeetingsStore();
+
+  const { activePage, navDirection, navigateTo, hashSessionId } = usePageNavigation();
+
+  // Share links (?share=token#/transcript/<id>) are read-only, scoped views.
+  const readOnly = isShareMode();
+
+  // Deep link: honour #/transcript/<id> by selecting that meeting once loaded
+  useEffect(() => {
+    if (!hashSessionId || selectedSession) return;
+    const match = sessions.find((s) => s.id === hashSessionId);
+    if (match) setSelectedSession(match);
+  }, [hashSessionId, sessions, selectedSession, setSelectedSession]);
+
+  // Share mode: the list endpoint is out of scope, so load the shared session
+  // directly by its hash id (the share token authorizes that single GET).
+  useEffect(() => {
+    if (!readOnly || !hashSessionId) return;
+    if (selectedSession?.id === hashSessionId) return;
+    void loadSessionById(hashSessionId);
+  }, [readOnly, hashSessionId, selectedSession, loadSessionById]);
 
   // Guards starting a new recording while one is in flight
-  const [confirmNewRecordingWhileActive, setConfirmNewMeetingWhileActive] = useState(false);
-
-  const navigateTo = (newPage: AppPage, customDir?: 'forward' | 'backward' | 'up' | 'fade') => {
-    if (newPage === activePage) return;
-
-    let dir: 'forward' | 'backward' | 'up' | 'fade' = customDir || 'fade';
-    if (!customDir) {
-      if (newPage === 'live') {
-        dir = 'up';
-      } else if (activePage === 'live') {
-        dir = 'backward';
-      } else {
-        const fromIdx = PAGE_ORDER[activePage] ?? 0;
-        const toIdx = PAGE_ORDER[newPage] ?? 0;
-        dir = toIdx > fromIdx ? 'forward' : toIdx < fromIdx ? 'backward' : 'fade';
-      }
-    }
-
-    setNavDirection(dir);
-
-    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
-      (document as any).startViewTransition(() => {
-        setActivePage(newPage);
-      });
-    } else {
-      setActivePage(newPage);
-    }
-  };
-
-  const [sessions, setSessions] = useState<SessionState[]>(() => {
-    try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [selectedSession, setSelectedSession] = useState<SessionState | null>(null);
-
-  // Resolved session for detail pages (falls back to the most recent one)
-  const effectiveSession = selectedSession || (sessions.length > 0 ? sessions[0] : null);
-
-  // Sync with backend sessions on mount
-  useEffect(() => {
-    fetch('/api/sessions')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((backendSessions: SessionState[]) => {
-        if (backendSessions && backendSessions.length > 0) {
-          setSessions((prev) => {
-            const map = new Map<string, SessionState>();
-            prev.forEach((s) => map.set(s.id, s));
-            backendSessions.forEach((s) => map.set(s.id, s));
-            const merged = Array.from(map.values());
-            try {
-              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
-            } catch {}
-            return merged;
-          });
-        }
-      })
-      .catch((err) => console.log('Backend sync:', err));
-  }, []);
-
-  // Save sessions to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessions));
-    } catch {}
-  }, [sessions]);
+  const [confirmNewMeetingWhileActive, setConfirmNewMeetingWhileActive] = useState(false);
+  /** New-meeting setup: optional title / agenda / template before recording. */
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupTitle, setSetupTitle] = useState('');
+  const [setupAgenda, setSetupAgenda] = useState('');
+  const [setupTemplate, setSetupTemplate] = useState('');
+  const [setupLang, setSetupLang] = useState<LanguageMode>('auto');
+  /** Stable per-session title/time so repeated sync upserts don't shift them. */
+  const sessionMetaRef = useRef<{ id: string; title: string; startedAt: string } | null>(null);
+  /** Ensures we navigate to meetings exactly once per processing session. */
+  const processingNavRef = useRef<string | null>(null);
 
   // When recording status becomes 'recording', navigate to 'live'
   useEffect(() => {
     if (status === 'recording') {
-      savedCompleteRef.current = null;
+      sessionMetaRef.current = null;
+      processingNavRef.current = null;
       navigateTo('live', 'up');
     }
-  }, [status]);
+  }, [status, navigateTo]);
 
-  // When post-recording processing finishes, save the session and STAY on the
-  // Record view. The summary is generated by the backend pipeline; exports are
-  // available from the Record page at any time.
-  const savedCompleteRef = useRef<string | null>(null);
+  // There is no processing page: on stop, return to the meetings list.
+  // Processing continues server-side; the list row shows live progress.
   useEffect(() => {
-    if (status === 'complete' && sessionId && savedCompleteRef.current !== sessionId) {
-      savedCompleteRef.current = sessionId;
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (status !== 'processing' || !sessionId) return;
+    if (processingNavRef.current === sessionId) return;
+    processingNavRef.current = sessionId;
+    navigateTo('meetings', 'backward');
+  }, [status, sessionId, navigateTo]);
 
-      const finalSessionSummary: MeetingSummary = summary || {
-        executive_summary: liveTranscript.length > 0
-          ? liveTranscript.map((t) => t.text).join(' ')
-          : 'Audio recording captured and processed.',
-        key_points: ['Session recorded and transcribed successfully.'],
-        decisions: [],
-        action_items: [],
-        questions: [],
-        speaker_contributions: [],
+  // Keep the library in sync WHILE processing/complete (not only once at the
+  // end) so the meetings list, detail view, and late-arriving summaries all
+  // update live — no browser refresh required.
+  useEffect(() => {
+    if (!sessionId || (status !== 'processing' && status !== 'complete')) return;
+
+    if (!sessionMetaRef.current || sessionMetaRef.current.id !== sessionId) {
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      sessionMetaRef.current = {
+        id: sessionId,
+        title: defaultMeetingTitle(),
+        startedAt: `Today at ${timeStr}`,
       };
-
-      const meetingTitle = `Meeting · ${todayString()} · ${timeStr}`;
-
-      const newSession: SessionState = {
-        id: sessionId || `session_${Date.now()}`,
-        title: meetingTitle,
-        status: 'complete',
-        started_at: `Today at ${timeStr}`,
-        ended_at: timeStr,
-        duration_seconds: recordingSeconds || 1,
-        language_mode: languageMode,
-        live_transcript: liveTranscript,
-        final_transcript: finalTranscript || undefined,
-        summary: finalSessionSummary,
-        speaker_names: {},
-      };
-
-      setSessions((prev) => {
-        const exists = prev.some((s) => s.id === newSession.id);
-        return exists ? prev.map((s) => (s.id === newSession.id ? newSession : s)) : [newSession, ...prev];
-      });
-      setSelectedSession(newSession);
     }
-  }, [status, sessionId, summary, liveTranscript, finalTranscript, recordingSeconds, languageMode]);
+    const meta = sessionMetaRef.current;
+
+    const finalSessionSummary: MeetingSummary | undefined =
+      summary ??
+      (status === 'complete'
+        ? {
+            executive_summary:
+              liveTranscript.length > 0
+                ? liveTranscript.map((t) => t.text).join(' ')
+                : 'Audio recording captured and processed.',
+            key_points: ['Session recorded and transcribed successfully.'],
+            decisions: [],
+            action_items: [],
+            questions: [],
+            speaker_contributions: [],
+          }
+        : undefined);
+
+    const derivedTitle = deriveTitleFromSummary(finalSessionSummary);
+
+    upsertSession({
+      id: sessionId,
+      title: derivedTitle || meta.title,
+      status,
+      started_at: meta.startedAt,
+      duration_seconds: recordingSeconds || 1,
+      language_mode: languageMode,
+      live_transcript: liveTranscript,
+      final_transcript: finalTranscript || undefined,
+      summary: finalSessionSummary,
+      speaker_names: {},
+    });
+  }, [
+    status,
+    sessionId,
+    summary,
+    liveTranscript,
+    finalTranscript,
+    recordingSeconds,
+    languageMode,
+    upsertSession,
+  ]);
+
+  // Once complete, re-pull the backend copy so audio_url / has_audio and any
+  // server-side fields land immediately (they previously required a reload).
+  useEffect(() => {
+    if (status !== 'complete' || !sessionId) return;
+    refreshSessions();
+    const retry = window.setTimeout(refreshSessions, 1500);
+    return () => window.clearTimeout(retry);
+  }, [status, sessionId, refreshSessions]);
 
   // Opening the "New Meeting" modal while a session is live must not silently
   // kill the recording. Route through a confirmation that keeps the mic streaming
   // until the user explicitly chooses to stop.
-  const handleStartNewRecording = () => {
+  const handleRequestNewMeeting = () => {
+    if (readOnly) return;
     if (status === 'recording' || status === 'processing') {
       setConfirmNewMeetingWhileActive(true);
       return;
     }
-    startSession(languageMode);
+    setSetupLang(languageMode);
+    setSetupTitle('');
+    setSetupAgenda('');
+    setSetupTemplate('');
+    setSetupOpen(true);
+  };
+
+  /** Starts recording with (optional) title/agenda/template applied first. */
+  const confirmNewMeeting = (withMeta: boolean) => {
+    setSetupOpen(false);
+    const meta: SessionPatch = {};
+    if (withMeta) {
+      if (setupTitle.trim()) meta.title = setupTitle.trim();
+      if (setupAgenda.trim()) meta.agenda = setupAgenda.trim();
+      if (setupTemplate) meta.template = setupTemplate;
+    }
+    void startSession(setupLang, Object.keys(meta).length > 0 ? meta : undefined);
+    setSetupTitle('');
+    setSetupAgenda('');
+    setSetupTemplate('');
   };
 
   const handleStopRecording = () => {
     stopSession();
   };
 
-  const handleSelectMeeting = (session: SessionState) => {
+  const handleSelectMeeting = (session: typeof sessions[number]) => {
     setSelectedSession(session);
-    navigateTo('transcript', 'forward');
+    navigateTo('transcript', 'forward', session.id);
+  };
+
+  /** Selects a session by id (if known) and opens its record page. */
+  const openMeetingById = (id?: string | null) => {
+    if (id) {
+      const match = sessions.find((s) => s.id === id);
+      if (match) setSelectedSession(match);
+      navigateTo('transcript', 'forward', id);
+    } else {
+      navigateTo('transcript', 'forward', undefined);
+    }
   };
 
   // Determine theme for current page
@@ -200,7 +221,7 @@ export const MainLayout: React.FC = () => {
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#F4F7F5] text-slate-900 flex flex-col overflow-hidden select-none selection:bg-[#008751]/30 font-sans">
-      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:bg-white focus:px-3 focus:py-2 focus:rounded-lg focus:text-xs focus:font-bold">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[60] focus:bg-white focus:px-4 focus:py-2 focus:rounded-lg focus:text-xs focus:font-bold focus:shadow-lg">
         Skip to content
       </a>
       {/* Subtle brand accent ribbon */}
@@ -212,28 +233,37 @@ export const MainLayout: React.FC = () => {
         {activePage !== 'live' && (
           <div className="absolute top-2.5 left-3 right-3 sm:left-6 sm:right-6 z-40 no-print flex justify-center pointer-events-none">
             <header className="pointer-events-auto w-full max-w-4xl bg-white/92 hover:bg-white backdrop-blur-md border border-slate-200/90 shadow-[0_4px_20px_rgba(0,0,0,0.06)] rounded-2xl px-3 sm:px-4 py-2 flex items-center justify-between transition-all">
-              {/* Left: Emblem & App Title */}
+              {/* Left: Emblem & App Title (acts as Home) */}
               <div
                 onClick={() => navigateTo('meetings', 'backward')}
-                className="flex items-center gap-2.5 cursor-pointer select-none active:scale-95 transition-all"
-                title="View All Meetings"
+                className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-all"
+                title="Go to all meetings"
               >
-                <VerbaLogo size="sm" variant="full" lightMode={true} />
+                <BrandLogo size="sm" variant="full" lightMode={true} />
               </div>
-
-              {/* Right: Actions */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleStartNewRecording()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
-                  title="Configure & Record New Meeting"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">New Meeting</span>
-                  <span className="sm:hidden">New</span>
-                </button>
-              </div>
+              {/* Right: current section label so users always know where they are */}
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                {activePage === 'meetings'
+                  ? 'All Meetings'
+                  : activePage === 'transcript'
+                  ? 'Meeting Record'
+                  : activePage === 'actions'
+                  ? 'Actions'
+                  : ''}
+              </span>
             </header>
+          </div>
+        )}
+
+        {/* View-only banner for shared read-only links */}
+        {readOnly && activePage !== 'live' && (
+          <div className="absolute top-[62px] left-3 right-3 sm:left-6 sm:right-6 z-30 no-print flex justify-center pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-4xl bg-amber-50/95 backdrop-blur border border-amber-200 shadow-sm rounded-xl px-3 py-1.5 flex items-center gap-2 text-amber-800">
+              <Eye className="w-3.5 h-3.5 flex-shrink-0" />
+              <p className="text-[11px] font-bold leading-snug">
+                View-only shared link — editing, recording and sharing are disabled.
+              </p>
+            </div>
           </div>
         )}
 
@@ -259,7 +289,12 @@ export const MainLayout: React.FC = () => {
               <MeetingsListView
                 sessions={sessions}
                 onSelectMeeting={handleSelectMeeting}
-                onStartRecord={() => handleStartNewRecording()}
+                onStartRecord={() => handleRequestNewMeeting()}
+                onRenameMeeting={renameSession}
+                onDeleteMeeting={removeSession}
+                onSessionUpsert={upsertSession}
+                onRefresh={refreshSessions}
+                readOnly={readOnly}
               />
             )}
 
@@ -271,6 +306,8 @@ export const MainLayout: React.FC = () => {
                     ? 'Live Meeting Recording'
                     : status === 'processing'
                     ? 'Processing Recording'
+                    : status === 'complete'
+                    ? 'Meeting Complete'
                     : 'Audio Stream'
                 }
                 recordingSeconds={recordingSeconds}
@@ -279,13 +316,16 @@ export const MainLayout: React.FC = () => {
                 analyserNode={analyserNode}
                 isPaused={isPaused}
                 isProcessing={status === 'processing'}
+                isComplete={status === 'complete'}
+                summary={summary}
                 processingStage={processingStage}
                 errorMessage={errorMessage}
                 onPause={pauseRecording}
                 onResume={resumeRecording}
                 onMinimize={() => navigateTo('meetings', 'backward')}
                 onStop={handleStopRecording}
-                onViewTranscript={() => navigateTo('transcript', 'forward')}
+                onOpenRecord={() => openMeetingById(sessionId)}
+                onStartRecord={() => handleRequestNewMeeting()}
                 languageMode={languageMode}
               />
             )}
@@ -297,13 +337,12 @@ export const MainLayout: React.FC = () => {
                   session={effectiveSession}
                   initialTab="summary"
                   onBack={() => navigateTo('meetings', 'backward')}
-                  onToggleActionItem={toggleActionItem}
-                  onExport={exportSession}
-                  onRenameSpeaker={renameSpeaker}
+                  onSessionUpdated={upsertSession}
+                  readOnly={readOnly}
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-3 bg-[#F8FAFC]">
-                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
                     <FileText className="w-7 h-7" />
                   </div>
                   <h3 className="text-base font-bold text-slate-900">No Transcript Yet</h3>
@@ -311,7 +350,7 @@ export const MainLayout: React.FC = () => {
                     Record a meeting or select an existing session to inspect its speaker-diarized transcript and playback.
                   </p>
                   <button
-                    onClick={() => handleStartNewRecording()}
+                    onClick={() => handleRequestNewMeeting()}
                     className="px-4 py-2 rounded-full bg-[#008751] hover:bg-[#007043] text-white text-xs font-semibold shadow-md shadow-emerald-700/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -327,17 +366,56 @@ export const MainLayout: React.FC = () => {
                 onBack={() => navigateTo('meetings', 'backward')}
                 onSelectMeeting={(session) => {
                   setSelectedSession(session);
-                  navigateTo('transcript', 'forward');
+                  navigateTo('transcript', 'forward', session.id);
                 }}
-                onStartRecord={() => handleStartNewRecording()}
+                onStartRecord={() => handleRequestNewMeeting()}
               />
             )}
           </div>
 
+          {/* Floating record button — labeled pill, docked above the button plate */}
+          {activePage !== 'live' &&
+            status !== 'recording' &&
+            status !== 'processing' &&
+            !readOnly && (
+              <button
+                onClick={() => handleRequestNewMeeting()}
+                aria-label="Record a new meeting"
+                title="Start recording a new meeting"
+                className="absolute right-4 bottom-[96px] z-40 h-14 px-5 rounded-full bg-[#008751] hover:bg-[#007043] text-white shadow-[0_8px_24px_rgba(0,135,81,0.35)] active:scale-95 transition-all cursor-pointer flex items-center gap-2 border border-emerald-400/40 no-print"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className="w-5 h-5"
+                  aria-hidden="true"
+                >
+                  <line x1="4" y1="10" x2="4" y2="14" />
+                  <line x1="8" y1="7" x2="8" y2="17" />
+                  <line x1="12" y1="4" x2="12" y2="20" />
+                  <line x1="16" y1="7" x2="16" y2="17" />
+                  <line x1="20" y1="10" x2="20" y2="14" />
+                </svg>
+                <span className="text-sm font-black tracking-tight">Record</span>
+              </button>
+            )}
+
           {/* Universal Floating Button Plate (Docked at bottom of ALL pages) */}
           <ButtonPlate
             activePage={activePage}
-            onNavigate={(page) => navigateTo(page)}
+            onNavigate={(page) => {
+              // There is no processing page — during finalization, route to the
+              // in-flight meeting's record view instead of the removed live screen.
+              if (page === 'live' && status === 'processing') {
+                if (sessionId) openMeetingById(sessionId);
+                else navigateTo('meetings', 'backward');
+                return;
+              }
+              navigateTo(page);
+            }}
             hasSession={Boolean(effectiveSession)}
             theme={pageTheme}
             isRecording={status === 'recording'}
@@ -347,11 +425,11 @@ export const MainLayout: React.FC = () => {
       </main>
 
       {/* Guard: opening setup while a session is live must be explicit */}
-      {confirmNewRecordingWhileActive && (
+      {confirmNewMeetingWhileActive && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-sm w-full p-5 space-y-4">
             <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0 border border-amber-200/70">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-4.5 h-4.5" />
               </div>
               <div>
@@ -383,9 +461,120 @@ export const MainLayout: React.FC = () => {
               </button>
               <button
                 onClick={() => setConfirmNewMeetingWhileActive(false)}
-                className="w-full px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 text-xs font-semibold cursor-pointer"
+                className="w-full px-4 py-2 rounded-xl text-slate-500 hover:text-slate-800 text-xs font-semibold active:scale-[0.99] transition-all cursor-pointer"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New meeting setup: language + optional title / agenda / template */}
+      {setupOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">New Meeting</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Optionally set an agenda or template — the summarizer will follow it.
+                </p>
+              </div>
+              <button
+                onClick={() => setSetupOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="setup-lang" className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Language
+              </label>
+              <div id="setup-lang" className="inline-flex p-1 rounded-xl bg-slate-100 border border-slate-200/80">
+                {(
+                  [
+                    ['auto', 'Auto'],
+                    ['en', 'English'],
+                    ['ha', 'Hausa'],
+                  ] as const
+                ).map(([lang, label]) => (
+                  <button
+                    key={lang}
+                    onClick={() => setSetupLang(lang)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      setupLang === lang ? 'bg-white text-[#008751] shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="setup-title" className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Title (optional)
+              </label>
+              <input
+                id="setup-title"
+                value={setupTitle}
+                onChange={(e) => setSetupTitle(e.target.value)}
+                maxLength={200}
+                placeholder="e.g. Weekly budget review"
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="setup-template" className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Template (optional)
+              </label>
+              <select
+                id="setup-template"
+                value={setupTemplate}
+                onChange={(e) => setSetupTemplate(e.target.value)}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751]"
+              >
+                <option value="">General meeting</option>
+                <option value="standup">Standup</option>
+                <option value="interview">Interview</option>
+                <option value="lecture">Lecture</option>
+                <option value="board">Board meeting</option>
+                <option value="hearing">Court hearing</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="setup-agenda" className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Agenda (optional)
+              </label>
+              <textarea
+                id="setup-agenda"
+                value={setupAgenda}
+                onChange={(e) => setSetupAgenda(e.target.value)}
+                rows={4}
+                maxLength={4000}
+                placeholder={'1. Budget update\n2. Staffing\n3. AOB'}
+                className="w-full px-3 py-2.5 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 focus:border-[#008751] resize-y"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={() => confirmNewMeeting(true)}
+                className="w-full px-4 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white text-xs font-bold active:scale-[0.99] transition-all cursor-pointer"
+              >
+                Start recording
+              </button>
+              <button
+                onClick={() => confirmNewMeeting(false)}
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold active:scale-[0.99] transition-all cursor-pointer"
+              >
+                Quick start (no setup)
               </button>
             </div>
           </div>

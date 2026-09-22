@@ -1,13 +1,13 @@
 import React from 'react';
 
-interface VerbaLogoProps {
+interface BrandLogoProps {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   variant?: 'full' | 'icon';
   lightMode?: boolean;
   className?: string;
 }
 
-export const VerbaLogo: React.FC<VerbaLogoProps> = ({
+export const BrandLogo: React.FC<BrandLogoProps> = ({
   size = 'md',
   variant = 'full',
   lightMode = false,
@@ -55,7 +55,7 @@ export const VerbaLogo: React.FC<VerbaLogoProps> = ({
       {variant === 'full' && (
         <div className="leading-tight">
           <div className={`${sizeMap.text} font-bold tracking-tight ${titleColor}`}>
-            Verba
+            Scribe
           </div>
           <div className={`${sizeMap.sub} font-medium tracking-wide ${subColor}`}>
             Meet · Transcribe · Summarize

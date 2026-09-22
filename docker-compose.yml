@@ -12,14 +12,22 @@ services:
       - GEMINI_LIVE_MODEL=${GEMINI_LIVE_MODEL:-gemini-3.5-transcribe-live}
       - GEMINI_FINAL_MODEL=${GEMINI_FINAL_MODEL:-gemini-3.5-transcribe}
       - GEMINI_SUMMARY_MODEL=${GEMINI_SUMMARY_MODEL:-gemini-3.8-flash}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:80}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost}
       - MAX_SESSION_MINUTES=${MAX_SESSION_MINUTES:-30}
       - MAX_AUDIO_SIZE_MB=${MAX_AUDIO_SIZE_MB:-100}
-      - TEMP_AUDIO_DIR=/tmp/meeting_audio
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
+      - RATE_LIMIT_LLM_PER_MINUTE=${RATE_LIMIT_LLM_PER_MINUTE:-6}
+      - DATA_DIR=/app/data
+      - AUDIO_DIR=/app/data/audio
+      - DB_PATH=/app/data/verba.db
+      - MOCK_MODE_IF_NO_KEY=${MOCK_MODE_IF_NO_KEY:-true}
+      - SESSION_RETENTION_DAYS=${SESSION_RETENTION_DAYS:-0}
+      - AUDIO_RETENTION_DAYS=${AUDIO_RETENTION_DAYS:-30}
     env_file:
       - .env
     volumes:
-      - /tmp/meeting_audio:/tmp/meeting_audio
+      # Durable storage: SQLite database + recorded WAV files
+      - ./data:/app/data
 
   frontend:
     build:
@@ -29,5 +37,7 @@ services:
     restart: unless-stopped
     ports:
       - "5173:80"
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:-}
     depends_on:
       - backend

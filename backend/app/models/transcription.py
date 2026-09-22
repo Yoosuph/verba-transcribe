@@ -45,6 +45,19 @@ class LiveTranscriptItem(BaseModel):
     timestamp_ms: int = 0
     speaker_label: Optional[str] = None
 
+class Bookmark(BaseModel):
+    id: str = Field(default="", description="Unique bookmark ID")
+    segment_id: Optional[str] = Field(default=None, description="Transcript segment this bookmark points at")
+    time_seconds: float = Field(default=0.0, description="Audio timestamp in seconds")
+    note: str = Field(default="", description="User note for the bookmark")
+    created_at: str = Field(default="", description="ISO timestamp")
+
+class QAEntry(BaseModel):
+    question: str
+    answer: str
+    evidence_segment_ids: List[str] = Field(default_factory=list)
+    created_at: str = ""
+
 class SessionState(BaseModel):
     id: str
     title: Optional[str] = "New Recording"
@@ -62,6 +75,18 @@ class SessionState(BaseModel):
     has_audio: bool = False
     audio_url: Optional[str] = None
     error_message: Optional[str] = None
+    # Feature: highlights/bookmarks
+    bookmarks: List[Bookmark] = Field(default_factory=list)
+    # Feature: Ask chat history (grounded Q&A)
+    qa_history: List[QAEntry] = Field(default_factory=list)
+    # Feature: folders/tags
+    tags: List[str] = Field(default_factory=list)
+    # Feature: meeting templates/agenda (shapes summarization)
+    agenda: Optional[str] = None
+    template: Optional[str] = None
+    # Feature: read-only share links
+    share_token: Optional[str] = None
+    share_expires_at: Optional[str] = None
 
 class RenameSpeakerRequest(BaseModel):
     old_name: str
@@ -70,11 +95,42 @@ class RenameSpeakerRequest(BaseModel):
 class UpdateActionItemRequest(BaseModel):
     completed: bool
 
+class UpdateSessionRequest(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200, description="New meeting title")
+    tags: Optional[List[str]] = Field(default=None, max_length=20, description="Replacement tag list")
+    agenda: Optional[str] = Field(default=None, max_length=4000, description="Meeting agenda shown to the summarizer")
+    template: Optional[str] = Field(default=None, max_length=64, description="Template name used for this meeting")
+
+class EditSegmentRequest(BaseModel):
+    text: Optional[str] = Field(default=None, max_length=4000)
+    speaker: Optional[str] = Field(default=None, max_length=120)
+
+class CreateBookmarkRequest(BaseModel):
+    segment_id: Optional[str] = None
+    time_seconds: float = 0.0
+    note: str = Field(default="", max_length=500)
+
+class ShareLinkRequest(BaseModel):
+    ttl_hours: int = Field(default=168, ge=1, le=24 * 90, description="Link lifetime in hours")
+
 class AskRequest(BaseModel):
     question: str
 
 class AskResponse(BaseModel):
     answer: str
     evidence_segment_ids: List[str] = Field(default_factory=list)
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=256)
+
+class CreateUserRequest(BaseModel):
+    username: str = Field(..., min_length=2, max_length=64)
+    password: str = Field(..., min_length=6, max_length=256)
+    role: Literal["viewer", "editor", "admin"] = "editor"
+
+class UserOut(BaseModel):
+    username: str
+    role: Literal["viewer", "editor", "admin"]
 
 

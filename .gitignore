@@ -40,3 +40,7 @@ Thumbs.db
 # Temporary assets
 image.png
 image copy.png
+
+# Local persistence (SQLite + recordings)
+data/
+backend/data/

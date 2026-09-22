@@ -17,6 +17,9 @@ COPY . .
 
 # Set python path
 ENV PYTHONPATH=/app
+ENV DATA_DIR=/app/data
+
+RUN mkdir -p /app/data/audio
 
 EXPOSE 8000
 

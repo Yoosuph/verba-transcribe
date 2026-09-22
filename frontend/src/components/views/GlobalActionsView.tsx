@@ -75,10 +75,11 @@ export const GlobalActionsView: React.FC<GlobalActionsViewProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 active:scale-[0.98] transition-all flex items-center justify-center text-slate-700 shadow-xs cursor-pointer"
+            className="h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 active:scale-[0.98] transition-all flex items-center gap-1 px-2.5 text-slate-700 shadow-xs cursor-pointer"
             title="Back to all meetings"
           >
             <ChevronLeft className="w-5 h-5" />
+            <span className="text-xs font-bold">Meetings</span>
           </button>
           <div>
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#008751] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">

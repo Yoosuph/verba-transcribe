@@ -9,6 +9,8 @@ import type {
 } from '../types/transcription';
 import { useAudioRecorder } from './useAudioRecorder';
 import { TranscriptionSocket } from '../services/transcriptionSocket';
+import { createSession, updateSession, type SessionPatch } from '../services/api';
+import { apiFetch } from '../services/auth';
 
 export function useRecordingSession() {
   const [sessionId, setSessionId] = useState<string>('');
@@ -22,7 +24,7 @@ export function useRecordingSession() {
   const [summary, setSummary] = useState<MeetingSummary | null>(null);
   const [speakerNames, setSpeakerNames] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'live' | 'transcript' | 'summary' | 'decisions' | 'actions' | 'speakers'>('live');
 
@@ -69,8 +71,7 @@ export function useRecordingSession() {
     };
   }, [status, isPaused]);
 
-
-  const startSession = useCallback(async (selectedLang: LanguageMode = 'auto') => {
+  const startSession = useCallback(async (selectedLang: LanguageMode = 'auto', meta?: SessionPatch) => {
     setErrorMessage(null);
     setStatus('connecting');
     setProcessingStage(null);
@@ -81,18 +82,35 @@ export function useRecordingSession() {
     setSpeakerNames({});
     setLanguageMode(selectedLang);
     setActiveTab('live');
-
-    const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    setSessionId(newSessionId);
+    setRecordingSeconds(0);
 
     try {
+      // Session IDs are generated server-side; clients cannot pick them.
+      const created = await createSession(selectedLang);
+      const newSessionId = created.id;
+      // Apply optional template/agenda BEFORE recording so the summarizer
+      // receives the agenda during finalization.
+      if (meta && (meta.agenda || meta.template || meta.title)) {
+        try {
+          await updateSession(newSessionId, meta);
+        } catch (e) {
+          console.warn('Failed applying session meta:', e);
+        }
+      }
+      setSessionId(newSessionId);
+
       const socket = new TranscriptionSocket(newSessionId, {
-        onConnected: () => {
-          socket.sendJson({
-            type: 'start',
-            session_id: newSessionId,
-            language_mode: selectedLang,
-          });
+        onConnected: (_sid, resumed) => {
+          // Start the live pipeline only on a fresh attach (not a reconnect
+          // onto an already-running runtime). Re-sending start after a server
+          // restart is required when the server reports a fresh session.
+          if (!resumed && (statusRef.current === 'connecting' || statusRef.current === 'recording')) {
+            socket.sendJson({
+              type: 'start',
+              session_id: newSessionId,
+              language_mode: selectedLang,
+            });
+          }
         },
         onInterimTranscript: (text) => {
           setInterimText(text);
@@ -110,14 +128,14 @@ export function useRecordingSession() {
           ]);
         },
         onProcessingStage: (stage) => {
-          setProcessingStage(stage as ProcessingStage);
+          setProcessingStage(stage);
         },
-        onFinalTranscript: (data: FinalTranscriptData) => {
+        onFinalTranscript: (data) => {
           setFinalTranscript(data);
           if (data.language) setDetectedLanguage(data.language);
           setActiveTab('transcript');
         },
-        onSummary: (data: MeetingSummary) => {
+        onSummary: (data) => {
           setSummary(data);
         },
         onComplete: () => {
@@ -137,11 +155,28 @@ export function useRecordingSession() {
           setErrorMessage(message);
           setStatus('error');
         },
-        onClose: () => {
-          if (statusRef.current === 'recording') {
-            setStatus('error');
-            setErrorMessage('WebSocket connection lost unexpectedly.');
+        onReconnected: () => {
+          // Transient network drop recovered — recording continues uninterrupted.
+          console.info('WebSocket reconnected; recording continues.');
+        },
+        onFatal: async (_code, message) => {
+          // Could not reconnect: release the microphone and surface the error.
+          await stopRecording();
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
           }
+          setErrorMessage(message);
+          setStatus('error');
+          try {
+            socketRef.current?.close();
+          } catch {
+            /* ignore */
+          }
+          socketRef.current = null;
+        },
+        onClose: () => {
+          /* explicit close only — no state change */
         },
       });
 
@@ -159,7 +194,9 @@ export function useRecordingSession() {
       setErrorMessage(err.message || 'Failed to start session');
       try {
         socketRef.current?.close();
-      } catch {}
+      } catch {
+        /* ignore */
+      }
       socketRef.current = null;
       stopRecording();
     }
@@ -183,11 +220,11 @@ export function useRecordingSession() {
     // 1. Stop audio recording
     await stopRecording();
 
-    // 2. Notify backend of stop (queued if socket still connecting)
+    // 2. Notify backend of stop (queued if socket still connecting/reconnecting)
     if (socketRef.current) {
       socketRef.current.sendJson({ type: 'stop' });
     }
-  }, [status, stopRecording]);
+  }, [stopRecording]);
 
   const renameSpeaker = useCallback(async (oldName: string, newName: string) => {
     if (!oldName || !newName || oldName === newName) return;
@@ -220,25 +257,16 @@ export function useRecordingSession() {
       };
     });
 
-    // Send update over WebSocket
-    if (socketRef.current) {
-      socketRef.current.sendJson({
-        type: 'rename_speaker',
-        old_name: oldName,
-        new_name: newName,
-      });
-    }
-
-    // Also persist via REST
+    // Persist via REST (single source of truth — no parallel WS mutation path)
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/speakers/rename`, {
+      const res = await apiFetch(`/api/sessions/${sessionId}/speakers/rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_name: oldName, new_name: newName }),
       });
       if (!res.ok) console.warn('Failed persisting renamed speaker via REST:', res.status);
     } catch (e) {
-      console.warn("Failed persisting renamed speaker via REST:", e);
+      console.warn('Failed persisting renamed speaker via REST:', e);
     }
   }, [sessionId]);
 
@@ -254,14 +282,14 @@ export function useRecordingSession() {
     });
 
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/actions/${actionId}`, {
+      const res = await apiFetch(`/api/sessions/${sessionId}/actions/${actionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed }),
       });
       if (!res.ok) console.warn('Failed toggling action item via REST:', res.status);
     } catch (e) {
-      console.warn("Failed toggling action item via REST:", e);
+      console.warn('Failed toggling action item via REST:', e);
     }
   }, [sessionId]);
 
@@ -286,7 +314,7 @@ export function useRecordingSession() {
   const exportSession = useCallback(async (format: 'markdown' | 'txt' | 'json') => {
     if (!sessionId) return;
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/export?format=${format}`);
+      const res = await apiFetch(`/api/sessions/${sessionId}/export?format=${format}`);
       if (!res.ok) {
         setErrorMessage('Export failed. Please try again.');
         return;
@@ -336,5 +364,4 @@ export function useRecordingSession() {
     jumpToSegment,
     exportSession,
   };
-
 }

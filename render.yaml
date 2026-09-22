@@ -8,7 +8,15 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      # REQUIRED: shared token protecting the API (generate a random value)
+      - key: AUTH_TOKEN
+        sync: false
       - key: CORS_ORIGINS
         value: '["*"]'
+      # Never serve fabricated transcripts in production
       - key: MOCK_MODE_IF_NO_KEY
-        value: "true"
+        value: "false"
+      - key: DATA_DIR
+        value: "/app/data"
+      # Note: free-tier disks are ephemeral — attach a persistent disk for DATA_DIR
+      # if recordings/sessions must survive deploys.

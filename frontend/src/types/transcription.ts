@@ -55,6 +55,21 @@ export interface MeetingSummary {
   speaker_contributions: SpeakerContribution[];
 }
 
+export interface Bookmark {
+  id: string;
+  segment_id?: string | null;
+  time_seconds: number;
+  note: string;
+  created_at: string;
+}
+
+export interface QAEntry {
+  question: string;
+  answer: string;
+  evidence_segment_ids: string[];
+  created_at: string;
+}
+
 export interface SessionData {
   id: string;
   title?: string;
@@ -72,6 +87,13 @@ export interface SessionData {
   has_audio?: boolean;
   audio_url?: string;
   error_message?: string;
+  bookmarks?: Bookmark[];
+  qa_history?: QAEntry[];
+  tags?: string[];
+  agenda?: string | null;
+  template?: string | null;
+  share_token?: string | null;
+  share_expires_at?: string | null;
 }
 
 export type SessionState = SessionData;
@@ -79,7 +101,7 @@ export type SessionState = SessionData;
 
 // WebSocket message schemas
 export type InboundWSMessage =
-  | { type: 'connected'; session_id: string }
+  | { type: 'connected'; session_id: string; resumed?: boolean }
   | { type: 'transcript.interim'; text: string; session_id: string }
   | { type: 'transcript.final'; text: string; session_id: string }
   | { type: 'processing'; stage: ProcessingStage }
@@ -89,10 +111,10 @@ export type InboundWSMessage =
   | { type: 'session_limit'; session_id: string; code: string; message: string }
   | { type: 'ping' }
   | { type: 'pong' }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string; session_id?: string };
 
 export type OutboundWSMessage =
   | { type: 'start'; session_id: string; language_mode: LanguageMode }
   | { type: 'stop' }
   | { type: 'ping' }
-  | { type: 'rename_speaker'; old_name: string; new_name: string };
+  | { type: 'pong' };

@@ -162,11 +162,13 @@ def test_session_manager_concurrent_mutations_do_not_corrupt():
 # ---------------------------------------------------------------------------
 # 4. Config / deployment alignment
 # ---------------------------------------------------------------------------
-def test_temp_audio_dir_matches_docker_compose_volume(monkeypatch):
-    """Config default must match the /tmp/meeting_audio volume in docker-compose.yml.
-
-    A stale exported TEMP_AUDIO_DIR would silently override .env (env vars beat env
-    files in pydantic-settings), so the check ignores the ambient environment."""
-    monkeypatch.delenv("TEMP_AUDIO_DIR", raising=False)
+def test_audio_dir_derives_from_data_dir_when_unset(monkeypatch):
+    """audio_dir/db_path default to data/audio and data/verba.db when not configured."""
+    monkeypatch.delenv("AUDIO_DIR", raising=False)
+    monkeypatch.delenv("DB_PATH", raising=False)
+    monkeypatch.delenv("DATA_DIR", raising=False)
     from app.config import Settings
-    assert Settings().temp_audio_dir == "/tmp/meeting_audio"
+    import os
+    s = Settings(_env_file=None)
+    assert s.audio_dir == os.path.join(s.data_dir, "audio")
+    assert s.db_path == os.path.join(s.data_dir, "verba.db")

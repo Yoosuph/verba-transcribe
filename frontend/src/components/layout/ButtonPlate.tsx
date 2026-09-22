@@ -5,13 +5,12 @@ import {
   ListChecks,
 } from 'lucide-react';
 
-export type AppPage = 'meetings' | 'live' | 'transcript' | 'summary' | 'actions';
+export type AppPage = 'meetings' | 'live' | 'transcript' | 'actions';
 
 interface ButtonPlateProps {
   activePage: AppPage;
   onNavigate: (page: AppPage) => void;
   hasSession: boolean;
-  actionCount?: number;
   theme?: 'light' | 'royal';
   isRecording?: boolean;
   isProcessing?: boolean;
@@ -30,7 +29,7 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
   const activeIndex =
     activePage === 'meetings'
       ? 0
-      : activePage === 'transcript' || activePage === 'summary'
+      : activePage === 'transcript'
       ? 1
       : activePage === 'actions'
       ? 2
@@ -41,11 +40,11 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
       {(isRecording || isProcessing) && activePage !== 'live' && (
         <button
           onClick={() => onNavigate('live')}
-          aria-label={isRecording ? 'Return to live recording' : 'View processing status'}
+          aria-label={isRecording ? 'Return to live recording' : 'View the meeting being finalized'}
           className="w-full mb-2 px-3 py-2.5 rounded-2xl bg-[#042A1D] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] transition-all cursor-pointer"
         >
           <span className={`w-2 h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-amber-400 animate-pulse'}`} aria-hidden="true" />
-          <span>{isRecording ? 'Recording in progress — tap to return' : 'Finalizing meeting — tap to view'}</span>
+          <span>{isRecording ? 'Recording in progress — tap to return' : 'Finalizing meeting — tap to view record'}</span>
         </button>
       )}
       <nav
@@ -98,18 +97,20 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
           </span>
         </button>
 
-        {/* 2. Record / Transcript */}
+        {/* 2. Transcript of the open meeting */}
         <button
           onClick={() => onNavigate('transcript')}
           disabled={!hasSession}
-          aria-current={activePage === 'transcript' || activePage === 'summary' ? 'page' : undefined}
-          aria-label="Transcript, summary and audio playback"
+          aria-current={activePage === 'transcript' ? 'page' : undefined}
+          aria-label={
+            hasSession ? 'Open transcript, summary and audio' : 'No meeting open yet'
+          }
           className={`relative z-10 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 min-h-[52px] ${
             !hasSession
-              ? 'opacity-30 cursor-not-allowed'
+              ? 'opacity-40 cursor-not-allowed'
               : 'cursor-pointer active:scale-95'
           } ${
-            activePage === 'transcript' || activePage === 'summary'
+            activePage === 'transcript'
               ? isRoyal
                 ? 'text-[#008751] font-bold'
                 : 'text-white font-bold'
@@ -117,15 +118,19 @@ export const ButtonPlate: React.FC<ButtonPlateProps> = ({
               ? 'text-white/70 hover:text-white'
               : 'text-slate-600 hover:text-slate-900'
           }`}
-          title="Transcript, Summary & Audio Playback"
+          title={
+            hasSession
+              ? 'Summary, transcript & audio of the open meeting'
+              : 'Open a meeting first'
+          }
         >
           <FileText
             className={`w-4 h-4 transition-transform duration-200 ${
-              activePage === 'transcript' || activePage === 'summary' ? 'scale-110' : 'scale-100'
+              activePage === 'transcript' ? 'scale-110' : 'scale-100'
             }`}
           />
           <span className="text-[11px] mt-1 tracking-tight font-semibold truncate">
-            Record
+            Transcript
           </span>
         </button>
 

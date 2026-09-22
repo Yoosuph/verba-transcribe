@@ -7,11 +7,17 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+LIVE_CONNECT_TIMEOUT_SECONDS = 5.0
+MAX_RECONNECT_ATTEMPTS = 5
+RECONNECT_BASE_DELAY_SECONDS = 1.0
+
+
 class GeminiLiveTranscriber:
     """
     Manages real-time bidirectional streaming with Gemini Live API using google-genai SDK.
     Maintains persistent async with session context to stream 16kHz mono PCM chunks and
-    dispatch interim and final transcript events.
+    dispatch interim and final transcript events. Automatically reconnects (with backoff)
+    when Gemini closes the session (go_away) or the upstream connection errors.
     """
 
     def __init__(
@@ -38,6 +44,8 @@ class GeminiLiveTranscriber:
         self._connected_event = asyncio.Event()
         self._mock_mode = False
         self._audio_chunk_count = 0
+        self._models: List[str] = []
+        self._model_index = 0
 
     def _get_language_codes(self) -> Optional[List[str]]:
         if self.language_mode == "ha":
@@ -63,91 +71,128 @@ class GeminiLiveTranscriber:
                     self.on_error("GEMINI_API_KEY is not configured in backend/.env")
                 return False
 
-        models_to_try = [settings.gemini_live_model] + settings.gemini_live_fallback_models
+        self._client = genai.Client(api_key=api_key)
+        self._models = [settings.gemini_live_model] + list(settings.gemini_live_fallback_models)
+        self._model_index = 0
+        config = types.LiveConnectConfig(
+            response_modalities=[types.Modality.TEXT],
+            input_audio_transcription=types.AudioTranscriptionConfig(
+                language_codes=self._get_language_codes(),
+                mode=types.AudioTranscriptionConfigMode.SMART,
+            ),
+            system_instruction=(
+                "You are an accurate live speech transcription system. "
+                "Transcribe the user's spoken audio verbatim in real time. "
+                "Accurately capture Hausa, English, or mixed English/Hausa speech without translating to English, "
+                "without adding commentary, and without omitting words."
+            )
+        )
 
-        for model_name in models_to_try:
-            try:
-                logger.info(f"[{self.session_id}] Connecting to Gemini Live with model: {model_name}")
-                self._client = genai.Client(api_key=api_key)
+        # Launch the persistent session runner (handles connect + reconnects)
+        self._session_task = asyncio.create_task(self._run_live_session(config))
 
-                config = types.LiveConnectConfig(
-                    response_modalities=[types.Modality.TEXT],
-                    input_audio_transcription=types.AudioTranscriptionConfig(
-                        language_codes=self._get_language_codes(),
-                        mode=types.AudioTranscriptionConfigMode.SMART,
-                    ),
-                    system_instruction=(
-                        "You are an accurate live speech transcription system. "
-                        "Transcribe the user's spoken audio verbatim in real time. "
-                        "Accurately capture Hausa, English, or mixed English/Hausa speech without translating to English, "
-                        "without adding commentary, and without omitting words."
-                    )
-                )
-
-                # Launch persistent session task maintaining the async context manager
-                self._session_task = asyncio.create_task(self._run_live_session(model_name, config))
-
-                # Wait up to 5 seconds for connection establishment
-                try:
-                    await asyncio.wait_for(self._connected_event.wait(), timeout=5.0)
-                    logger.info(f"[{self.session_id}] Successfully established Live session with {model_name}")
-                    return True
-                except asyncio.TimeoutError:
-                    logger.warning(f"[{self.session_id}] Timeout establishing session with {model_name}")
-                    if self._session_task:
-                        self._session_task.cancel()
-                        self._session_task = None
-
-            except Exception as e:
-                logger.warning(f"[{self.session_id}] Failed connecting with model {model_name}: {e}")
-
-        logger.error(f"[{self.session_id}] All Gemini Live models failed.")
-        if settings.mock_mode_if_no_key:
-            logger.info(f"[{self.session_id}] Falling back to simulated live transcription.")
-            self._mock_mode = True
-            self._session_task = asyncio.create_task(self._mock_transcription_loop())
-            return True
-
-        if self.on_error:
-            self.on_error("Could not connect to Gemini Live service.")
-        return False
-
-    async def _run_live_session(self, model_name: str, config: types.LiveConnectConfig) -> None:
-        """
-        Runs the persistent async context manager so ws_connect stays active
-        for the entire recording session.
-        """
         try:
-            async with self._client.aio.live.connect(model=model_name, config=config) as session:
-                self._session = session
-                self._connected_event.set()
+            await asyncio.wait_for(self._connected_event.wait(), timeout=LIVE_CONNECT_TIMEOUT_SECONDS)
+            logger.info(f"[{self.session_id}] Successfully established Live session.")
+            return True
+        except asyncio.TimeoutError:
+            # First attempt failed; the runner keeps retrying in background —
+            # give the retries a moment before declaring failure.
+            try:
+                await asyncio.wait_for(self._connected_event.wait(), timeout=LIVE_CONNECT_TIMEOUT_SECONDS * 4)
+                logger.info(f"[{self.session_id}] Live session established after retry.")
+                return True
+            except asyncio.TimeoutError:
+                logger.error(f"[{self.session_id}] Could not establish Gemini Live session.")
+                await self.stop()
+                # Mock is only permitted when no key is configured — never as a
+                # silent substitute for a real model failure.
+                if not settings.gemini_api_key and settings.mock_mode_if_no_key:
+                    self._mock_mode = True
+                    self._is_running = True
+                    self._session_task = asyncio.create_task(self._mock_transcription_loop())
+                    return True
+                if self.on_error:
+                    self.on_error("Could not connect to Gemini Live service.")
+                return False
 
-                send_task = asyncio.create_task(self._send_loop(session))
-                receive_task = asyncio.create_task(self._receive_loop(session))
+    async def _run_live_session(self, config: types.LiveConnectConfig) -> None:
+        """Connects, streams, and transparently reconnects with backoff while running."""
+        attempt = 0
+        ever_connected = False
+        try:
+            while self._is_running:
+                model_name = self._pick_model()
+                try:
+                    logger.info(f"[{self.session_id}] Connecting to Gemini Live with model: {model_name}")
+                    async with self._client.aio.live.connect(
+                        model=model_name, config=config
+                    ) as session:
+                        self._session = session
+                        self._connected_event.set()
+                        attempt = 0  # successful connection resets backoff
+                        ever_connected = True
 
-                done, pending = await asyncio.wait(
-                    [send_task, receive_task],
-                    return_when=asyncio.FIRST_EXCEPTION
-                )
+                        send_task = asyncio.create_task(self._send_loop(session))
+                        receive_task = asyncio.create_task(self._receive_loop(session))
 
-                for task in pending:
-                    task.cancel()
+                        done, pending = await asyncio.wait(
+                            [send_task, receive_task],
+                            return_when=asyncio.FIRST_EXCEPTION
+                        )
+                        for task in pending:
+                            task.cancel()
+                        for task in done:
+                            exc = task.exception()
+                            if exc and self._is_running:
+                                raise exc
 
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            # If 1000 normal close when stopping, ignore
-            if "1000" in str(e) and not self._is_running:
-                logger.info(f"[{self.session_id}] Gemini Live connection closed normally.")
-            else:
-                logger.error(f"[{self.session_id}] Gemini Live session error: {e}")
-                if self._is_running and self.on_error:
-                    self.on_error(f"Gemini Live error: {e}")
+                    if not self._is_running:
+                        break
+                    # Session closed cleanly (e.g. go_away) while we still want to run
+                    logger.warning(f"[{self.session_id}] Live session closed; reconnecting...")
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    if not self._is_running:
+                        break
+                    if "1000" in str(e):
+                        logger.info(f"[{self.session_id}] Gemini Live connection closed normally.")
+                        break
+                    logger.error(f"[{self.session_id}] Gemini Live session error: {e}")
+                    if self.on_error:
+                        self.on_error(f"Gemini Live error: {e}")
+                    # Connection failed — advance to the next configured model
+                    if self._models and not ever_connected:
+                        self._model_index = min(self._model_index + 1, len(self._models) - 1)
+                    elif ever_connected and self._models and self._model_index < len(self._models) - 1:
+                        # After a mid-session failure try primary again first; only step
+                        # down through fallbacks after the primary fails repeatedly.
+                        pass
+
+                if not self._is_running:
+                    break
+
+                attempt += 1
+                if attempt > MAX_RECONNECT_ATTEMPTS:
+                    logger.error(f"[{self.session_id}] Giving up after {MAX_RECONNECT_ATTEMPTS} reconnect attempts.")
+                    if self.on_error:
+                        self.on_error("Live transcription connection lost; could not reconnect.")
+                    break
+
+                delay = RECONNECT_BASE_DELAY_SECONDS * (2 ** (attempt - 1))
+                logger.info(f"[{self.session_id}] Reconnecting in {delay}s (attempt {attempt})...")
+                await asyncio.sleep(delay)
         finally:
             self._session = None
 
-    async def send_audio_chunk(self, pcm_data: bytes) -> None:
-        """Queues a 16-bit 16kHz mono PCM chunk to be forwarded to Gemini."""
+    def _pick_model(self) -> str:
+        if not self._models:
+            self._models = [settings.gemini_live_model] + list(settings.gemini_live_fallback_models)
+        return self._models[self._model_index % len(self._models)]
+
+    def send_audio_chunk(self, pcm_data: bytes) -> None:
+        """Queues a 16-bit 16kHz mono PCM chunk to be forwarded to Gemini (non-blocking)."""
         if not self._is_running:
             return
         self._audio_chunk_count += 1
@@ -179,6 +224,7 @@ class GeminiLiveTranscriber:
         except Exception as e:
             if self._is_running:
                 logger.error(f"[{self.session_id}] Error in send loop: {e}")
+                raise
 
     async def _receive_loop(self, session) -> None:
         """Listens for live transcription events from Gemini Live."""
@@ -209,16 +255,14 @@ class GeminiLiveTranscriber:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            # WebSocket code 1000 is a normal close
             if "1000" in str(e) or not self._is_running:
                 logger.info(f"[{self.session_id}] Receive loop closed gracefully.")
             else:
                 logger.error(f"[{self.session_id}] Error in receive loop: {e}")
-                if self.on_error:
-                    self.on_error(f"Gemini Live connection error: {str(e)}")
+                raise
 
     async def _mock_transcription_loop(self) -> None:
-        """Fallback simulation for offline / testing."""
+        """Fallback simulation — only reachable when no API key is configured."""
         sample_dialogues = [
             ("Barkan ku da", "Barkan ku da warhaka, yau zamu tattauna batun kasafin kudin mu."),
             ("Good morning everyone,", "Good morning everyone, we are reviewing the agenda for this week."),
@@ -251,7 +295,10 @@ class GeminiLiveTranscriber:
     async def stop(self) -> None:
         """Stops the live transcription session cleanly."""
         self._is_running = False
-        await self._send_queue.put(None)
+        try:
+            self._send_queue.put_nowait(None)
+        except asyncio.QueueFull:
+            pass
 
         if self._session_task:
             self._session_task.cancel()

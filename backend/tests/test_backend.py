@@ -113,8 +113,8 @@ def test_session_lifecycle():
     # 7. Audio endpoint test
     import os
     from app.config import settings
-    os.makedirs(settings.temp_audio_dir, exist_ok=True)
-    audio_path = os.path.join(settings.temp_audio_dir, f"{session_id}.wav")
+    os.makedirs(settings.audio_dir, exist_ok=True)
+    audio_path = os.path.join(settings.audio_dir, f"{session_id}.wav")
     dummy_wav = b"RIFF" + (36).to_bytes(4, "little") + b"WAVEfmt " + (16).to_bytes(4, "little") + b"\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
     with open(audio_path, "wb") as f:
         f.write(dummy_wav)
@@ -154,13 +154,16 @@ def test_websocket_flow(monkeypatch):
     # Force the offline mock path so the test never depends on live Gemini availability
     monkeypatch.setattr(settings, "gemini_api_key", "")
     monkeypatch.setattr(settings, "mock_mode_if_no_key", True)
-    with client.websocket_connect("/ws/transcribe/ws_test_session") as ws:
+    # Sessions must be created server-side before a WebSocket may attach
+    created = client.post("/api/sessions").json()
+    session_id = created["id"]
+    with client.websocket_connect(f"/ws/transcribe/{session_id}") as ws:
         connected_msg = ws.receive_json()
         assert connected_msg["type"] == "connected"
-        assert connected_msg["session_id"] == "ws_test_session"
+        assert connected_msg["session_id"] == session_id
 
         # Send start
-        ws.send_json({"type": "start", "session_id": "ws_test_session", "language_mode": "auto"})
+        ws.send_json({"type": "start", "session_id": session_id, "language_mode": "auto"})
 
         # Send enough dummy 16kHz PCM chunks to trigger mock transcription cadence
         chunk = b"\x00\x00" * 320  # 20ms chunk
@@ -172,15 +175,22 @@ def test_websocket_flow(monkeypatch):
 
         # Collect events with a bound so failures can't hang forever
         event_types = []
-        for _ in range(30):
+        for _ in range(60):
             msg = ws.receive_json()
             event_types.append(msg["type"])
             if msg["type"] == "complete":
                 break
-            if msg["type"] == "error" and msg.get("code") in ("FINAL_TRANSCRIBE_ERROR", "SUMMARIZATION_ERROR"):
+            if msg["type"] == "error" and msg.get("code") in (
+                "FINAL_TRANSCRIBE_ERROR", "SUMMARIZATION_ERROR", "PROCESSING_FAILED", "PROCESSING_TIMEOUT"
+            ):
                 break
 
         assert "processing" in event_types
         assert "final_transcript" in event_types
         assert "summary" in event_types
         assert "complete" in event_types
+
+        # The finalized session must be persisted and retrievable over REST
+        fetched = client.get(f"/api/sessions/{session_id}").json()
+        assert fetched["status"] == "complete"
+        assert fetched["summary"] is not None
