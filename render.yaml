@@ -8,6 +8,9 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
+      # OpenRouter fallback after Gemini quota exhaustion (optional)
+      - key: OPENROUTER_API_KEY
+        sync: false
       # REQUIRED: shared token protecting the API (generate a random value)
       - key: AUTH_TOKEN
         sync: false

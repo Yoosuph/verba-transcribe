@@ -17,6 +17,7 @@ os.environ["DB_PATH"] = os.path.join(_tmpdir, "verba.db")
 os.environ["AUTH_TOKEN"] = ""
 # Never hit the network from tests — force the simulation path.
 os.environ["GEMINI_API_KEY"] = ""
+os.environ["OPENROUTER_API_KEY"] = ""
 os.environ["RATE_LIMIT_LLM_PER_MINUTE"] = "0"
 
 import pytest  # noqa: E402

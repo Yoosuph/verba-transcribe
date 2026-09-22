@@ -14,6 +14,7 @@ from app.models.transcription import (
 )
 from app.services.gemini_transcribe import MAX_GUIDANCE_CHARS
 from app.services.gemini_retry import call_with_retry
+from app.services import openrouter_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,32 @@ class MeetingSummarizer:
             except Exception as e:
                 last_error = e
                 logger.warning(f"Summary generation failed with model {model_name}: {e}")
+
+        # Non-Gemini fallback (OpenRouter): used when every Gemini model is
+        # quota-exhausted or otherwise unavailable. Skipped when no key is set.
+        if openrouter_fallback.is_configured():
+            try:
+                logger.warning(
+                    "Gemini chain failed (%s); trying OpenRouter fallback", last_error
+                )
+                raw = await openrouter_fallback.chat_completion(
+                    system=SUMMARIZER_SYSTEM_PROMPT,
+                    user=user_content,
+                    temperature=0.1,
+                    max_tokens=2500,
+                )
+                parsed_json = openrouter_fallback.extract_json(raw)
+                summary = MeetingSummary(**parsed_json)
+                for idx, d in enumerate(summary.decisions):
+                    if not d.id:
+                        d.id = f"dec_{idx + 1}"
+                for idx, a in enumerate(summary.action_items):
+                    if not a.id:
+                        a.id = f"act_{idx + 1}"
+                return summary
+            except Exception as or_err:
+                last_error = or_err
+                logger.warning("OpenRouter fallback failed: %s", or_err)
 
         # API key is present: never silently substitute a fabricated summary.
         raise RuntimeError(f"Summary generation failed with all configured models: {last_error}")

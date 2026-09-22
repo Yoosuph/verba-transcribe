@@ -43,6 +43,16 @@ class Settings(BaseSettings):
         "gemini-3.5-flash",
         "gemini-flash-latest",
     ]
+    # Non-Gemini fallback (OpenRouter) used only after the Gemini chain fails
+    # (e.g. all free-tier models exhausted for the day). Empty key disables it.
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_models: List[str] = [
+        "openai/gpt-4o-mini",
+        "deepseek/deepseek-chat",
+        "qwen/qwen3.8-27b:free",
+        "nvidia/nemotron-3.5-lightning:free",
+    ]
     cors_origins: Union[List[str], str] = ["*"]
     max_session_minutes: int = 30
     max_audio_size_mb: int = 100
